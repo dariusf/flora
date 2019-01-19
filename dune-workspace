@@ -1,0 +1,4 @@
+(lang dune 1.0)
+
+; this turns off the overly-severe warnings in dev mode
+(profile release)

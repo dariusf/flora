@@ -1,0 +1,4 @@
+#!/bin/bash
+set -ex
+dune build src/app/main.exe
+OCAMLRUNPARAM=b _build/default/src/app/main.exe $@
