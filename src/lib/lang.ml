@@ -1,4 +1,5 @@
 
+open Containers
 open Common
 
 module Simpl = struct
@@ -6,19 +7,28 @@ module Simpl = struct
   type t =
     | And
     | If
+    | Bool of bool
+    | Call of string
+    | Block
   [@@deriving show]
 
   let draw focus text =
+    (* Printf.printf "%s %s f:%s\n" text (string_of_bool (text = "true")) (string_of_bool focus); *)
     let open Notty.I in
     let s =
       if focus then
         Styles.focused
       else
-        match text with
-        | "..." -> Styles.hole
-        | "if" | "else" -> Styles.keyword
-        | "&&" -> Styles.normal
-        | _ -> Styles.normal
+        (
+          match text with
+          | "..." -> Styles.hole
+          | "if" | "else" -> Styles.keyword
+          | "&&" -> Styles.normal
+          | "true" | "false" -> Styles.value
+          (* this behaves weirdly when combined with the true/false case *)
+          | _ when is_int text -> Styles.value
+          | _ -> Styles.normal
+        )
     in
     string s text
 
@@ -49,13 +59,25 @@ module Simpl = struct
           (alt |> hpad 2 0)
           <->
           (draw this_fc "}")
+        | Bool b, [] ->
+          draw this_fc (string_of_bool b)
+        | Call f, args ->
+          draw this_fc f <|>
+          draw this_fc "(" <|>
+          hcat (List.intersperse (draw this_fc ", ") args) <|>
+          draw this_fc ")"
+        | Block, args ->
+          List.map (fun s -> s <|> draw this_fc ";") args |> vcat
         | _ -> failwith ("invalid combination of args: " ^ show_node pp node ^ " and " ^ string_of_int (List.length fs))
     in
     with_focus focus node f
 
   let example = Static (If, [
-      Static (And, [Empty; Empty]);
-      Empty;
+      Static (And,
+              [Static (Bool true, []); Static (Bool false, [])]);
+      Dynamic (Block, [
+          Dynamic (Call "print", [Static (Bool true, []); Static (Bool false, [])]);
+          Empty;]);
       Empty;
     ])
 

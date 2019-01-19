@@ -1,10 +1,15 @@
 
+let is_int s =
+  try ignore (int_of_string s); true
+  with _ -> false
+
 module Styles = struct
   open Notty.A
   let keyword = fg red
   let hole = fg lightblack
   let normal = empty
   let focused = bg yellow ++ fg black
+  let value = fg (Notty.A.rgb_888 147 112 219)
 end
 
 type 'a node =
