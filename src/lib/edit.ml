@@ -3,17 +3,18 @@ open Teash
 open Containers
 open Lens.Infix
 
-module Focus
-  (* : sig
-     type t
-     val initial : t
-     val deeper : t -> t
-     val shallower : t -> int -> t
-     val view_deeper : t -> int -> t
-     (* val current : t -> int option *)
-     val is_current : t -> int -> bool
-     end *)
-= struct
+module Focus : sig
+  type t
+  val initial : t
+  val is_focused : t -> bool
+  val view_deeper : t -> int -> t
+  val show : t -> string
+  val deeper : t -> t
+  val shallower : t -> t
+  val on_last : t -> (int -> int) -> t
+  val next : t -> t
+  val prev : t -> t
+end = struct
   module D = CCFQueue
   (**
      tracks the path to the highest child focused.
@@ -25,7 +26,6 @@ module Focus
 
   let initial =
     F D.empty
-  (* D.singleton 0 *)
 
   (* these operate on intermediate focus structures
      and thus are allowed to contain Nope *)
@@ -58,14 +58,8 @@ module Focus
 
   (* these operate on the entire state and thus will never see a Nope *)
 
-  (* this is partial because we don't expect a nope to be stored *)
   let deeper (F d) = F (D.snoc d 0)
 
-  (* let d1, _ = D.take_back_exn d in d1 *)
-  (* let current d = D.take_front d |> Option.map fst *)
-  (* let topmost d = D.size d = 1 *)
-
-  (* see deeper for why this is partial *)
   let shallower (F d) =
     if D.is_empty d then F d
     else let d1, _ = D.take_back_exn d in F d1
@@ -91,10 +85,11 @@ type 'a node =
 [@@deriving show]
 
 module Styles = struct
-  let keyword = Notty.A.(fg red)
-  let hole = Notty.A.(fg lightblack)
-  let normal = Notty.A.empty
-  let focused = Notty.A.(bg yellow ++ fg black)
+  open Notty.A
+  let keyword = fg red
+  let hole = fg lightblack
+  let normal = empty
+  let focused = bg yellow ++ fg black
 end
 
 type simpl =
@@ -102,17 +97,6 @@ type simpl =
   | If
 [@@deriving show]
 
-(* let tag = function
-   | Empty -> failwith "no tag for empty"
-   | Static (t, _) -> t
-   | Dynamic (t, _) -> t *)
-
-(* let items = function
-   | Empty -> []
-   | Static (_, i) -> List.map snd i
-   | Dynamic (_, i) -> i *)
-
-(* TODO parent focus *)
 let draw focus text =
   let open Notty.I in
   let s =
@@ -127,7 +111,7 @@ let draw focus text =
   in
   string s text
 
-(* a catamorphism which also computes focus for a given node *)
+(** A catamorphism which also computes focus for a given node *)
 let rec with_focus focus node
     (f : bool -> Notty.I.t Containers.List.t -> 'a node -> Notty.I.t) =
   match node with
@@ -137,48 +121,12 @@ let rec with_focus focus node
   | Static (tag, items)
   | Dynamic (tag, items) ->
     let fs = List.mapi (fun i e ->
-
         let deeper = Focus.view_deeper focus i in
-
         with_focus deeper e f
-
-       (* |> is_focused *)
       ) items in
-    (* e) items in *)
-    (* failwith "" *)
-    (* let children = List.map (fun (e, fc) -> *)
-    (* with_focus Focus.(view_deeper focus)) items in *)
     f (Focus.is_focused focus) fs node
 
-(* let a =
-   with_focus 
-
-   match tag with
-   | And ->
-    let [left; right] = items node in
-    render_simpl (Focus.view_deeper focus 0) left <|> 
-    (draw focus " && ") <|>
-    render_simpl (Focus.view_deeper focus 1) right
-   | If ->
-    let [cond; conseq; alt] = items node in
-    (draw focus "if" <|>
-     (draw focus " (" <|>
-      render_simpl (Focus.view_deeper focus 0) cond <|>
-      draw focus ") ")
-     <|> draw focus " {")
-    <->
-    (render_simpl (Focus.view_deeper focus 1) conseq |> hpad 2 0)
-    <->
-    (draw focus "} " <|>
-     (draw focus "else") <|>
-     draw focus " {")
-    <->
-    (render_simpl (Focus.view_deeper focus 2) alt |> hpad 2 0)
-    <->
-    (draw focus "}") *)
-
-
-let rec render_simpl focus node =
+let render_simpl focus node =
   let open Notty.I in
   let f this_fc fs node =
     match node with
@@ -187,35 +135,22 @@ let rec render_simpl focus node =
     | Dynamic (tag, _) ->
       match tag, fs with
       | And, [left; right] ->
-        (* let [left; right] = items in *)
-        (* render_simpl fl left *)
         left <|> 
         (draw this_fc " && ") <|>
         right
-      (* render_simpl fr right *)
       | If, [cond; conseq; alt] ->
-        (* let [cond; conseq; alt] = items in *)
-        (* let  = fs in *)
         (draw this_fc "if" <|>
          (draw this_fc " (" <|>
-          (* render_simpl fc cond <|> *)
           cond <|>
-          draw this_fc ") ")
-         <|> draw this_fc " {")
+          draw this_fc ") {"))
         <->
-        (
-          (* render_simpl fcs conseq *)
-          conseq
-          |> hpad 2 0)
+        (conseq |> hpad 2 0)
         <->
         (draw this_fc "} " <|>
          (draw this_fc "else") <|>
          draw this_fc " {")
         <->
-        (
-          alt
-          (* render_simpl fa alt *)
-          |> hpad 2 0)
+        (alt |> hpad 2 0)
         <->
         (draw this_fc "}")
       | _ -> failwith ("invalid combination of args: " ^ show_node pp_simpl node ^ " and " ^ string_of_int (List.length fs))
@@ -234,10 +169,6 @@ type msg =
   | Shallower
   | Next
   | Prev
-  (* | Inc
-     | Dec
-     | Set of int
-     | Reset*)
   | Key of Notty.Unescape.key 
 
 let example = Static (If, [
@@ -266,11 +197,8 @@ let update_debug state =
   (state_debug ^= (Focus.show state.focus)) state
 
 let update state = function
-  | Deeper ->
-    (state_focus ^%= Focus.deeper) state |> update_debug, Cmd.none
+  | Deeper -> (state_focus ^%= Focus.deeper) state |> update_debug, Cmd.none
   | Shallower -> (state_focus ^%= Focus.shallower) state |> update_debug, Cmd.none
-  (*   | Set n -> n, Cmd.none
-       | Reset -> 0, Cmd.none *)
   | Next -> (state_focus ^%= Focus.next) state |> update_debug, Cmd.none
   | Prev -> (state_focus ^%= Focus.prev) state |> update_debug, Cmd.none
   | Key key -> state, (key_to_cmd key)
