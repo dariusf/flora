@@ -10,10 +10,13 @@ type mode =
 [@@deriving show]
 
 type field = {
-  engine: Zed_edit.t;
+  engine: unit Zed_edit.t;
   cursor: Zed_cursor.t;
-  ctx: Zed_edit.context;
+  ctx: unit Zed_edit.context;
 }
+
+let pp_field fmt (t : field) = Format.fprintf fmt "<field>"
+let show_field x = Format.asprintf "%a" pp_field x
 
 type state = {
   mode: mode;
@@ -30,6 +33,7 @@ type msg =
   | Next
   | Prev
   | ToInsert
+  | ToNormal
   | Key of Notty.Unescape.key 
 
 let init () = {
@@ -41,9 +45,7 @@ let init () = {
     let engine = Zed_edit.create () in
     let cursor = Zed_edit.new_cursor engine in
     let ctx = Zed_edit.context engine cursor in
-    {
-      engine; cursor; ctx
-    }
+    { engine; cursor; ctx }
 }, Cmd.none
 
 let key_to_cmd = function
@@ -66,7 +68,20 @@ let update state = function
   | Next -> (state_focus ^%= Focus.next) state |> update_debug, Cmd.none
   | Prev -> (state_focus ^%= Focus.prev) state |> update_debug, Cmd.none
   | ToInsert -> (state_mode ^= Insert) state, Cmd.none
-  | Key key -> state, (key_to_cmd key)
+  | ToNormal -> (state_mode ^= Normal) state, Cmd.none
+  | Key key -> (
+      match state.mode with
+      | Insert ->
+        (match key with
+         | `ASCII c, _mods ->
+           let act = Zed_edit.Insert (CamomileLibrary.UChar.of_char c) in
+           Zed_edit.get_action act state.field.ctx;
+           state, Cmd.none
+         | `Escape, _mods -> state, Cmd.msg ToNormal
+         | _ -> state, Cmd.none);
+      | Normal -> state, (key_to_cmd key)
+    )
+
 
 let view state = Notty.(
     [
@@ -81,7 +96,8 @@ let view state = Notty.(
       (* render_if 1 2 3 *)
       Lang.Simpl.render state.focus state.structure;
       I.string Styles.normal state.debug;
-      I.string Styles.normal (state |. state_mode |> show_mode);
+      I.string Styles.normal (state.mode |> show_mode);
+      I.string Styles.normal (Zed_edit.text state.field.engine |> Zed_rope.to_string);
 
     ] |> I.vcat
   )
