@@ -49,14 +49,14 @@ let init () = {
 }, Cmd.none
 
 let key_to_cmd = function
-  | (`Arrow `Up), _mods -> Cmd.msg Shallower
-  | (`Arrow `Down), _mods -> Cmd.msg Deeper
-  | (`Arrow `Left), _mods -> Cmd.msg Prev
-  | (`Arrow `Right), _mods -> Cmd.msg Next
+  | `Arrow `Up, _mods -> Cmd.msg Shallower
+  | `Arrow `Down, _mods -> Cmd.msg Deeper
+  | `Arrow `Left, _mods -> Cmd.msg Prev
+  | `Arrow `Right, _mods -> Cmd.msg Next
   (* | (`ASCII 's'), _mods -> Cmd.msg (Set 42)
      | (`ASCII 'r'), _mods -> Cmd.msg Reset *)
-  | (`ASCII 'i'), _mods -> Cmd.msg ToInsert
-  | (`ASCII 'q'), _mods -> App.exit
+  | `ASCII 'i', _mods -> Cmd.msg ToInsert
+  | `ASCII 'q', _mods -> App.exit
   | _ -> Cmd.none
 
 let update_debug state =
@@ -71,14 +71,20 @@ let update state = function
   | ToNormal -> (state_mode ^= Normal) state, Cmd.none
   | Key key -> (
       match state.mode with
-      | Insert ->
-        (match key with
-         | `ASCII c, _mods ->
-           let act = Zed_edit.Insert (CamomileLibrary.UChar.of_char c) in
-           Zed_edit.get_action act state.field.ctx;
-           state, Cmd.none
-         | `Escape, _mods -> state, Cmd.msg ToNormal
-         | _ -> state, Cmd.none);
+      | Insert -> (
+          match key with
+          | `Escape, _mods -> state, Cmd.msg ToNormal
+          | _ ->
+            let act = match key with
+              | `ASCII c, _mods -> Some (Zed_edit.Insert (CamomileLibrary.UChar.of_char c))
+              | `Backspace, _mods -> Some (Zed_edit.Delete_prev_char)
+              | `Arrow `Left, _mods -> Some (Zed_edit.Prev_char)
+              | `Arrow `Right, _mods -> Some (Zed_edit.Next_char)
+              | _ -> None
+            in
+            Option.iter (fun a -> Zed_edit.get_action a state.field.ctx) act;
+            state, Cmd.none
+        );
       | Normal -> state, (key_to_cmd key)
     )
 
