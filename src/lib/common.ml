@@ -20,6 +20,8 @@ type 'a node =
 
 module Focus : sig
   type t
+  [@@deriving show]
+
   val initial : t
   val is_focused : t -> bool
   val view_deeper : t -> int -> t
@@ -38,6 +40,7 @@ end = struct
      nope is to distinguish the empty case from that.
   *)
   type t = Nope | F of int D.t
+  [@@deriving show]
 
   let initial =
     F D.empty
