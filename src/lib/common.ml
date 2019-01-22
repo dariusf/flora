@@ -27,6 +27,7 @@ module Focus : sig
 
   val initial : t
   val is_focused : t -> bool
+  val is_parent_focused : t -> bool
   val view_deeper : t -> int -> t
   val show : t -> string
   val deeper : t -> t
@@ -42,7 +43,7 @@ end = struct
      (due to focus being inherited).
      nope is to distinguish the empty case from that.
   *)
-  type t = Nope | F of int D.t
+  type t = Nope | ByParent | F of int D.t
   [@@deriving show]
 
   let initial =
@@ -54,20 +55,30 @@ end = struct
   let is_focused d =
     match d with
     | Nope -> false
+    | ByParent -> false
+    | F d -> D.is_empty d
+
+  let is_parent_focused d =
+    match d with
+    | Nope -> false
+    | ByParent -> true
     | F d -> D.is_empty d
 
   let view_deeper fd n =
     match fd with
-    | Nope -> fd
+    | Nope
+    | ByParent -> fd
     | F d ->
-      if D.is_empty d then F d
+      if D.is_empty d then
+        ByParent
       else
         let e, d1 = D.take_front_exn d in
         if e = n then F d1 else Nope
 
   let show d =
     match d with
-    | Nope -> "nope"
+    | Nope -> "Nope"
+    | ByParent -> "ByParent"
     | F d ->
       let f = d |> CCFQueue.to_list in
       match f with
@@ -99,20 +110,42 @@ end = struct
 
 end
 
+let logfile = open_out "log.ignore"
+let log s =
+  IO.write_line logfile s; flush logfile
+
 (** A catamorphism which also computes focus for a given node *)
 let rec with_focus focus node
-    (f : bool -> Notty.I.t Containers.List.t -> 'a node -> Notty.I.t) =
+    (f : is_focused:bool -> is_parent_focused:bool -> 'b Containers.List.t -> 'a node -> 'b) =
   match node with
   | Empty ->
-    let this_focused = Focus.is_focused focus in
-    f this_focused [] node
+    f ~is_focused:(Focus.is_focused focus) ~is_parent_focused:(Focus.is_parent_focused focus) [] node
   | Static (tag, items)
   | Dynamic (tag, items) ->
     let fs = List.mapi (fun i e ->
         let deeper = Focus.view_deeper focus i in
         with_focus deeper e f
       ) items in
-    f (Focus.is_focused focus) fs node
+    f ~is_focused:(Focus.is_focused focus) ~is_parent_focused:(Focus.is_parent_focused focus) fs node
+
+let rec map_focus focus node
+    (f : is_focused:bool -> is_parent_focused:bool -> 'a node -> 'b node) =
+  let go ~is_focused ~is_parent_focused children n =
+    match n with
+    | Empty -> f ~is_focused ~is_parent_focused Empty
+    | Static (tag, items) -> f ~is_focused ~is_parent_focused (Static (tag, children))
+    | Dynamic (tag, items) -> f ~is_focused ~is_parent_focused (Dynamic (tag, children))
+  in
+  with_focus focus node go
+
+let modify_ast focus node insertion =
+  let f ~is_focused ~is_parent_focused:_ n =
+    if is_focused then
+      insertion
+    else
+      n
+  in
+  map_focus focus node f
 
 let match_completions term completions =
   completions |> List.filter (String.prefix ~pre:term)

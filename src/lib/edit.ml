@@ -52,15 +52,13 @@ let init () = {
     let ctx = Zed_edit.context engine cursor in
     { engine; cursor; ctx });
   completions = [];
-}, Cmd.none
+}, Cmd.msg UpdateCompletions
 
 let key_to_cmd = function
-  | `Arrow `Up, _mods -> Cmd.msg Shallower
-  | `Arrow `Down, _mods -> Cmd.msg Deeper
-  | `Arrow `Left, _mods -> Cmd.msg Prev
-  | `Arrow `Right, _mods -> Cmd.msg Next
-  (* | (`ASCII 's'), _mods -> Cmd.msg (Set 42)
-     | (`ASCII 'r'), _mods -> Cmd.msg Reset *)
+  | `Arrow `Up, _mods | `ASCII 'k', _mods -> Cmd.msg Shallower
+  | `Arrow `Down, _mods | `ASCII 'j', _mods -> Cmd.msg Deeper
+  | `Arrow `Left, _mods | `ASCII 'h', _mods -> Cmd.msg Prev
+  | `Arrow `Right, _mods | `ASCII 'l', _mods -> Cmd.msg Next
   | `ASCII 'i', _mods -> Cmd.msg ToInsert
   | `ASCII 'q', _mods -> App.exit
   | _ -> Cmd.none
@@ -78,7 +76,17 @@ let update state = function
   | ToInsert -> (state_mode ^= Insert) state, Cmd.none
   | ToNormal -> (state_mode ^= Normal) state, Cmd.none
   | CommitCompletion ->
-    failwith "nyi"
+    let text = get_field_text state.field in
+    let compl = match_completions text (Lang.completions |> List.map fst) in
+    (match compl with
+     | [c] ->
+       let ast = List.assoc ~eq:String.equal c Lang.completions in
+       state |> (state_structure ^%= (fun s -> modify_ast state.focus s ast))
+       |> (state_focus ^%= Focus.deeper)
+       |> (state_field ^%= (fun f -> Zed_edit.(get_action Delete_prev_line f.ctx); f))
+     , Cmd.msg UpdateCompletions
+     | _ -> state, Cmd.none
+    )
   | UpdateCompletions ->
     let text = get_field_text state.field in
     let compl = match_completions text (Lang.completions |> List.map fst) in
@@ -88,6 +96,8 @@ let update state = function
       | Insert -> (
           match key with
           | `Escape, _mods -> state, Cmd.msg ToNormal
+          | `Tab, _mods
+          | `Enter, _mods -> state, Cmd.msg CommitCompletion
           | _ ->
             let act = match key with
               | `ASCII c, _mods -> Some (Zed_edit.Insert (CamomileLibrary.UChar.of_char c))

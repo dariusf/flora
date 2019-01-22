@@ -39,40 +39,40 @@ module Simpl = struct
 
   let render focus node =
     let open Notty.I in
-    let f this_fc fs node =
+    let f ~is_focused ~is_parent_focused fs node =
       match node with
-      | Empty -> draw this_fc "..."
+      | Empty -> draw is_parent_focused "..."
       | Static (tag, _)
       | Dynamic (tag, _) ->
         match tag, fs with
         | And, [left; right] ->
           left <|> 
-          (draw this_fc " && ") <|>
+          (draw is_parent_focused " && ") <|>
           right
         | If, [cond; conseq; alt] ->
-          (draw this_fc "if" <|>
-           (draw this_fc " (" <|>
+          (draw is_parent_focused "if" <|>
+           (draw is_parent_focused " (" <|>
             cond <|>
-            draw this_fc ") {"))
+            draw is_parent_focused ") {"))
           <->
           (conseq |> hpad 2 0)
           <->
-          (draw this_fc "} " <|>
-           (draw this_fc "else") <|>
-           draw this_fc " {")
+          (draw is_parent_focused "} " <|>
+           (draw is_parent_focused "else") <|>
+           draw is_parent_focused " {")
           <->
           (alt |> hpad 2 0)
           <->
-          (draw this_fc "}")
+          (draw is_parent_focused "}")
         | Bool b, [] ->
-          draw this_fc (string_of_bool b)
+          draw is_parent_focused (string_of_bool b)
         | Call f, args ->
-          draw this_fc f <|>
-          draw this_fc "(" <|>
-          hcat (List.intersperse (draw this_fc ", ") args) <|>
-          draw this_fc ")"
+          draw is_parent_focused f <|>
+          draw is_parent_focused "(" <|>
+          hcat (List.intersperse (draw is_parent_focused ", ") args) <|>
+          draw is_parent_focused ")"
         | Block, args ->
-          List.map (fun s -> s <|> draw this_fc ";") args |> vcat
+          List.map (fun s -> s <|> draw is_parent_focused ";") args |> vcat
         | _ -> failwith ("invalid combination of args: " ^ show_node pp node ^ " and " ^ string_of_int (List.length fs))
     in
     with_focus focus node f
@@ -85,5 +85,7 @@ module Simpl = struct
           Empty;]);
       Empty;
     ])
+
+  let example = Static (If, [Empty; Empty; Empty])
 
 end
