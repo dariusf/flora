@@ -24,6 +24,7 @@ type state = {
   structure: Lang.Simpl.t node;
   debug: string;
   field: field;
+  completions: string list;
 }
 [@@deriving lens, show]
 
@@ -34,6 +35,7 @@ type msg =
   | Prev
   | ToInsert
   | ToNormal
+  | UpdateCompletions
   | Key of Notty.Unescape.key 
 
 let init () = {
@@ -41,11 +43,12 @@ let init () = {
   focus = Focus.initial;
   structure = Lang.Simpl.example;
   debug = Focus.show Focus.initial;
-  field =
+  field = (
     let engine = Zed_edit.create () in
     let cursor = Zed_edit.new_cursor engine in
     let ctx = Zed_edit.context engine cursor in
-    { engine; cursor; ctx }
+    { engine; cursor; ctx });
+  completions = [];
 }, Cmd.none
 
 let key_to_cmd = function
@@ -62,6 +65,8 @@ let key_to_cmd = function
 let update_debug state =
   (state_debug ^= (Focus.show state.focus)) state
 
+let get_field_text f = Zed_edit.text f.engine |> Zed_rope.to_string
+
 let update state = function
   | Deeper -> (state_focus ^%= Focus.deeper) state |> update_debug, Cmd.none
   | Shallower -> (state_focus ^%= Focus.shallower) state |> update_debug, Cmd.none
@@ -69,6 +74,9 @@ let update state = function
   | Prev -> (state_focus ^%= Focus.prev) state |> update_debug, Cmd.none
   | ToInsert -> (state_mode ^= Insert) state, Cmd.none
   | ToNormal -> (state_mode ^= Normal) state, Cmd.none
+  | UpdateCompletions ->
+    let text = get_field_text state.field in
+    (state_completions ^= ["lol"; text; text]) state, Cmd.none
   | Key key -> (
       match state.mode with
       | Insert -> (
@@ -83,11 +91,20 @@ let update state = function
               | _ -> None
             in
             Option.iter (fun a -> Zed_edit.get_action a state.field.ctx) act;
-            state, Cmd.none
+            state, Cmd.msg UpdateCompletions
         );
       | Normal -> state, (key_to_cmd key)
     )
 
+
+let render_field state =
+  let open Notty.I in
+  let text = get_field_text state.field in
+  let cursor = match state.mode with
+    | Normal -> string Styles.normal ""
+    | Insert -> string Styles.cursor " "
+  in
+  string Styles.normal text <|> cursor
 
 let view state = Notty.(
     [
@@ -103,8 +120,8 @@ let view state = Notty.(
       Lang.Simpl.render state.focus state.structure;
       I.string Styles.normal state.debug;
       I.string Styles.normal (state.mode |> show_mode);
-      I.string Styles.normal (Zed_edit.text state.field.engine |> Zed_rope.to_string);
-
+      render_field state;
+      I.vcat (state.completions |> List.map (I.string Styles.normal));
     ] |> I.vcat
   )
 

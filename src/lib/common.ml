@@ -10,6 +10,7 @@ module Styles = struct
   let normal = empty
   let focused = bg yellow ++ fg black
   let value = fg (Notty.A.rgb_888 147 112 219)
+  let cursor = bg lightblack
 end
 
 type 'a node =
