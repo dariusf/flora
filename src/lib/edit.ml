@@ -18,10 +18,12 @@ type field = {
 let pp_field fmt (t : field) = Format.fprintf fmt "<field>"
 let show_field x = Format.asprintf "%a" pp_field x
 
+module Lang = Lang.Simpl
+
 type state = {
   mode: mode;
   focus: Focus.t;
-  structure: Lang.Simpl.t node;
+  structure: Lang.t node;
   debug: string;
   field: field;
   completions: string list;
@@ -36,12 +38,13 @@ type msg =
   | ToInsert
   | ToNormal
   | UpdateCompletions
+  | CommitCompletion
   | Key of Notty.Unescape.key 
 
 let init () = {
   mode = Normal;
   focus = Focus.initial;
-  structure = Lang.Simpl.example;
+  structure = Lang.example;
   debug = Focus.show Focus.initial;
   field = (
     let engine = Zed_edit.create () in
@@ -74,9 +77,12 @@ let update state = function
   | Prev -> (state_focus ^%= Focus.prev) state |> update_debug, Cmd.none
   | ToInsert -> (state_mode ^= Insert) state, Cmd.none
   | ToNormal -> (state_mode ^= Normal) state, Cmd.none
+  | CommitCompletion ->
+    failwith "nyi"
   | UpdateCompletions ->
     let text = get_field_text state.field in
-    (state_completions ^= ["lol"; text; text]) state, Cmd.none
+    let compl = match_completions text (Lang.completions |> List.map fst) in
+    (state_completions ^= compl) state, Cmd.none
   | Key key -> (
       match state.mode with
       | Insert -> (
@@ -117,7 +123,7 @@ let view state = Notty.(
       (* ; *)
 
       (* render_if 1 2 3 *)
-      Lang.Simpl.render state.focus state.structure;
+      Lang.render state.focus state.structure;
       I.string Styles.normal state.debug;
       I.string Styles.normal (state.mode |> show_mode);
       render_field state;

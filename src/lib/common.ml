@@ -1,4 +1,6 @@
 
+open Containers
+
 let is_int s =
   try ignore (int_of_string s); true
   with _ -> false
@@ -111,3 +113,6 @@ let rec with_focus focus node
         with_focus deeper e f
       ) items in
     f (Focus.is_focused focus) fs node
+
+let match_completions term completions =
+  completions |> List.filter (String.prefix ~pre:term)

@@ -32,6 +32,11 @@ module Simpl = struct
     in
     string s text
 
+  let completions = [
+    "if", Static (If, [Empty; Empty; Empty]);
+    "and", Static (And, [Empty; Empty]);
+  ]
+
   let render focus node =
     let open Notty.I in
     let f this_fc fs node =
