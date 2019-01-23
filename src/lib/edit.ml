@@ -55,10 +55,14 @@ let init () = {
 }, Cmd.msg UpdateCompletions
 
 let key_to_cmd = function
-  | `Arrow `Up, _mods | `ASCII 'k', _mods -> Cmd.msg Shallower
-  | `Arrow `Down, _mods | `ASCII 'j', _mods -> Cmd.msg Deeper
-  | `Arrow `Left, _mods | `ASCII 'h', _mods -> Cmd.msg Prev
-  | `Arrow `Right, _mods | `ASCII 'l', _mods -> Cmd.msg Next
+  | `Arrow `Up, _mods
+  | `ASCII 'k', _mods -> Cmd.msg Shallower
+  | `Arrow `Down, _mods
+  | `ASCII 'j', _mods -> Cmd.msg Deeper
+  | `Arrow `Left, _mods
+  | `ASCII 'h', _mods -> Cmd.msg Prev
+  | `Arrow `Right, _mods
+  | `ASCII 'l', _mods -> Cmd.msg Next
   | `ASCII 'i', _mods -> Cmd.msg ToInsert
   | `ASCII 'q', _mods -> App.exit
   | _ -> Cmd.none
@@ -93,7 +97,10 @@ let update state = function
     )
   | UpdateCompletions ->
     let text = get_field_text state.field in
-    let compl = match_completions text (Lang.completions |> List.map fst) in
+    let compl =
+      if String.is_empty text then []
+      else match_completions text (Lang.completions |> List.map fst)
+    in
     (state_completions ^= compl) state, Cmd.none
   | Key key -> (
       match state.mode with
