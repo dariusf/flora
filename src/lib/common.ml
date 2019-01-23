@@ -167,6 +167,19 @@ let next_postorder focus node pred =
     );
   !result
 
+let prev_postorder focus node pred =
+  let prev = ref None in
+  let result = ref None in
+  (* also relies on traversal order *)
+  cata_focus focus node (fun foc _ node ->
+      if not foc.is_focused && pred node && Option.is_none !result then
+        prev := Some (foc.path_from_root)
+      else if foc.is_focused then
+        result := !prev
+      else ()
+    );
+  !result
+
 let rec map_focus focus node
     (f : focus_view -> 'a node -> 'b node) =
   let go foc children n =

@@ -36,6 +36,7 @@ type msg =
   | Next
   | Prev
   | NextHole
+  | PrevHole
   | ToInsert
   | ToNormal
   | UpdateCompletions
@@ -64,6 +65,7 @@ let key_to_cmd = function
   | `ASCII 'h', _mods -> Cmd.msg Prev
   | `Arrow `Right, _mods
   | `ASCII 'l', _mods -> Cmd.msg Next
+  | `ASCII 'N', _mods -> Cmd.msg PrevHole
   | `ASCII 'n', _mods -> Cmd.msg NextHole
   | `ASCII 'i', _mods -> Cmd.msg ToInsert
   | `ASCII 'q', _mods -> App.exit
@@ -117,6 +119,11 @@ let update state = function
       else state
     in
     s1 |> update_debug, Cmd.none
+  | PrevHole ->
+    (match prev_postorder state.focus state.structure (fun n -> equal_node Lang.equal n Empty) with
+     | None -> state, Cmd.none
+     | Some f -> (state_focus ^= f) state, Cmd.none
+    )
   | NextHole ->
     (match next_postorder state.focus state.structure (fun n -> equal_node Lang.equal n Empty) with
      | None -> state, Cmd.none
