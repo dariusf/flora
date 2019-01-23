@@ -2,4 +2,4 @@
   (name edit)
   (public_name edit)
   (libraries ppx_deriving containers containers.data lambda-term teash lens)
-  (preprocess (pps ppx_deriving.show lens.ppx_deriving)))
+  (preprocess (pps ppx_deriving.show ppx_deriving.eq lens.ppx_deriving)))

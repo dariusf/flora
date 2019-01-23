@@ -10,7 +10,7 @@ module Simpl = struct
     | Bool of bool
     | Call of string
     | Block
-  [@@deriving show]
+  [@@deriving show, eq]
 
   let draw focus text =
     (* Printf.printf "%s %s f:%s\n" text (string_of_bool (text = "true")) (string_of_bool focus); *)
@@ -39,7 +39,7 @@ module Simpl = struct
 
   let render focus node =
     let open Notty.I in
-    let f ~is_focused ~is_parent_focused fs node =
+    let f { is_parent_focused } fs node =
       match node with
       | Empty -> draw is_parent_focused "..."
       | Static (tag, _)
@@ -75,7 +75,7 @@ module Simpl = struct
           List.map (fun s -> s <|> draw is_parent_focused ";") args |> vcat
         | _ -> failwith ("invalid combination of args: " ^ show_node pp node ^ " and " ^ string_of_int (List.length fs))
     in
-    with_focus focus node f
+    cata_focus focus node f
 
   let example = Static (If, [
       Static (And,

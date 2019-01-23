@@ -19,7 +19,7 @@ type 'a node =
   | Empty
   | Static of 'a * 'a node list
   | Dynamic of 'a * 'a node list
-[@@deriving show]
+[@@deriving show, eq]
 
 module Focus : sig
   type t
@@ -38,6 +38,7 @@ module Focus : sig
 
   (* TODO this depends on nodes and maybe shouldn't be here *)
   val validate : t -> 'a node -> bool
+  val add : int -> t -> t
 end = struct
   module D = CCFQueue
   (**
@@ -84,13 +85,12 @@ end = struct
     | ByParent -> "ByParent"
     | F d ->
       let f = d |> CCFQueue.to_list in
-      match f with
-      | [] -> "<empty>"
-      | _ -> f |> List.map string_of_int |> String.concat ";" |> fun a -> "[" ^ a ^ "]"
+      f |> List.map string_of_int |> String.concat ";" |> fun a -> "[" ^ a ^ "]"
 
   (* these operate on the entire state and thus will never see a Nope *)
 
   let deeper (F d) = F (D.snoc d 0)
+  let add i (F d) = F (D.snoc d i)
 
   let shallower (F d) =
     if D.is_empty d then F d
@@ -120,44 +120,66 @@ end = struct
          |> Option.get_or ~default:false
        | None -> true
       )
-
-
 end
 
 let logfile = open_out "log.ignore"
 let log s =
   IO.write_line logfile s; flush logfile
 
-let next_postorder focus node =
-  ()
+type focus_view = {
+  is_focused: bool;
+  is_parent_focused: bool;
+  focus_relative: Focus.t;
+  path_from_root: Focus.t;
+}
 
 (** A catamorphism which also computes focus for a given node *)
-let rec with_focus focus node
-    (f : is_focused:bool -> is_parent_focused:bool -> 'b Containers.List.t -> 'a node -> 'b) =
-  match node with
-  | Empty ->
-    f ~is_focused:(Focus.is_focused focus) ~is_parent_focused:(Focus.is_parent_focused focus) [] node
-  | Static (tag, items)
-  | Dynamic (tag, items) ->
-    let fs = List.mapi (fun i e ->
-        let deeper = Focus.view_deeper focus i in
-        with_focus deeper e f
-      ) items in
-    f ~is_focused:(Focus.is_focused focus) ~is_parent_focused:(Focus.is_parent_focused focus) fs node
+let cata_focus focus node
+    (f : focus_view -> 'b Containers.List.t -> 'a node -> 'b) =
+  let rec run relative path node =
+    let foc = {
+      is_focused = Focus.is_focused relative;
+      is_parent_focused = Focus.is_parent_focused relative;
+      focus_relative = relative;
+      path_from_root = path
+    } in
+    match node with
+    | Empty ->
+      f foc [] node
+    | Static (tag, items)
+    | Dynamic (tag, items) ->
+      let child_results = List.mapi (fun i e ->
+          run (Focus.view_deeper relative i) (Focus.add i path) e
+        ) items in
+      f foc child_results node
+  in run focus Focus.initial node
+
+let next_postorder focus node pred =
+  let seen = ref false in
+  let result = ref None in
+  (* this relies on the left-to-right, bottom-up traversal order of cata_focus *)
+  cata_focus focus node (fun foc _ node ->
+      if foc.is_focused then
+        seen := true
+      else if !seen && Option.is_none !result && pred node then
+        result := Some (foc.path_from_root)
+      else ()
+    );
+  !result
 
 let rec map_focus focus node
-    (f : is_focused:bool -> is_parent_focused:bool -> 'a node -> 'b node) =
-  let go ~is_focused ~is_parent_focused children n =
+    (f : focus_view -> 'a node -> 'b node) =
+  let go foc children n =
     match n with
-    | Empty -> f ~is_focused ~is_parent_focused Empty
-    | Static (tag, _) -> f ~is_focused ~is_parent_focused (Static (tag, children))
-    | Dynamic (tag, _) -> f ~is_focused ~is_parent_focused (Dynamic (tag, children))
+    | Empty -> f foc Empty
+    | Static (tag, _) -> f foc (Static (tag, children))
+    | Dynamic (tag, _) -> f foc (Dynamic (tag, children))
   in
-  with_focus focus node go
+  cata_focus focus node go
 
 let modify_ast focus node insertion =
-  let f ~is_focused ~is_parent_focused:_ n =
-    if is_focused then
+  let f foc n =
+    if foc.is_focused then
       insertion
     else
       n

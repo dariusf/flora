@@ -35,6 +35,7 @@ type msg =
   | Shallower
   | Next
   | Prev
+  | NextHole
   | ToInsert
   | ToNormal
   | UpdateCompletions
@@ -63,12 +64,20 @@ let key_to_cmd = function
   | `ASCII 'h', _mods -> Cmd.msg Prev
   | `Arrow `Right, _mods
   | `ASCII 'l', _mods -> Cmd.msg Next
+  | `ASCII 'n', _mods -> Cmd.msg NextHole
   | `ASCII 'i', _mods -> Cmd.msg ToInsert
   | `ASCII 'q', _mods -> App.exit
   | _ -> Cmd.none
 
 let update_debug state =
-  (state_debug ^= (Focus.show state.focus)) state
+  let d = Focus.show state.focus in
+  let d1 =
+    match next_postorder state.focus state.structure (fun n -> equal_node Lang.equal n Empty) with
+    | None -> "no next node"
+    | Some f -> Focus.show f
+  in
+  let d2 = d ^ "; next = " ^ d1 in
+  (state_debug ^= d2) state
 
 let get_field_text f = Zed_edit.text f.engine |> Zed_rope.to_string
 
@@ -108,6 +117,11 @@ let update state = function
       else state
     in
     s1 |> update_debug, Cmd.none
+  | NextHole ->
+    (match next_postorder state.focus state.structure (fun n -> equal_node Lang.equal n Empty) with
+     | None -> state, Cmd.none
+     | Some f -> (state_focus ^= f) state, Cmd.none
+    )
   | ToInsert -> (state_mode ^= Insert) state, Cmd.none
   | ToNormal ->
     state |> (state_mode ^= Normal) |> (state_field ^%= clear_field), Cmd.none
@@ -150,7 +164,6 @@ let update state = function
         );
       | Normal -> state, (key_to_cmd key)
     )
-
 
 let render_field state =
   let open Notty.I in
