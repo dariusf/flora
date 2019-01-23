@@ -76,10 +76,38 @@ let clear_field f =
   Zed_edit.(get_action Delete_prev_line f.ctx); f
 
 let update state = function
-  | Deeper -> (state_focus ^%= Focus.deeper) state |> update_debug, Cmd.none
-  | Shallower -> (state_focus ^%= Focus.shallower) state |> update_debug, Cmd.none
-  | Next -> (state_focus ^%= Focus.next) state |> update_debug, Cmd.none
-  | Prev -> (state_focus ^%= Focus.prev) state |> update_debug, Cmd.none
+  | Deeper ->
+    let f1 = Focus.deeper state.focus in
+    let s1 =
+      if Focus.validate f1 state.structure then
+        (state_focus ^= f1) state
+      else state
+    in
+    s1 |> update_debug, Cmd.none
+  | Shallower ->
+    let f1 = Focus.shallower state.focus in
+    let s1 =
+      if Focus.validate f1 state.structure then
+        (state_focus ^= f1) state
+      else state
+    in
+    s1 |> update_debug, Cmd.none
+  | Next ->
+    let f1 = Focus.next state.focus in
+    let s1 =
+      if Focus.validate f1 state.structure then
+        (state_focus ^= f1) state
+      else state
+    in
+    s1 |> update_debug, Cmd.none
+  | Prev ->
+    let f1 = Focus.prev state.focus in
+    let s1 =
+      if Focus.validate f1 state.structure then
+        (state_focus ^= f1) state
+      else state
+    in
+    s1 |> update_debug, Cmd.none
   | ToInsert -> (state_mode ^= Insert) state, Cmd.none
   | ToNormal ->
     state |> (state_mode ^= Normal) |> (state_field ^%= clear_field), Cmd.none

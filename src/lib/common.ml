@@ -35,6 +35,9 @@ module Focus : sig
   val on_last : t -> (int -> int) -> t
   val next : t -> t
   val prev : t -> t
+
+  (* TODO this depends on nodes and maybe shouldn't be here *)
+  val validate : t -> 'a node -> bool
 end = struct
   module D = CCFQueue
   (**
@@ -85,9 +88,6 @@ end = struct
       | [] -> "<empty>"
       | _ -> f |> List.map string_of_int |> String.concat ";" |> fun a -> "[" ^ a ^ "]"
 
-  (* TODO need to limit this by the depth of the structure *)
-  (* TODO in general (e.g. next position) depends on the structure *)
-
   (* these operate on the entire state and thus will never see a Nope *)
 
   let deeper (F d) = F (D.snoc d 0)
@@ -106,13 +106,30 @@ end = struct
     on_last d (fun e -> e + 1)
 
   let prev d =
-    on_last d (fun e -> e - 1)
+    on_last d (fun e -> Int.max 0 (e - 1))
+
+  let rec validate (F d) node =
+    match node with
+    | Empty -> D.is_empty d
+    | Static (_, children)
+    | Dynamic (_, children) ->
+      (match D.take_front d with
+       | Some (e, d1) ->
+         List.nth_opt children e
+         |> Option.map (validate (F d1))
+         |> Option.get_or ~default:false
+       | None -> true
+      )
+
 
 end
 
 let logfile = open_out "log.ignore"
 let log s =
   IO.write_line logfile s; flush logfile
+
+let next_postorder focus node =
+  ()
 
 (** A catamorphism which also computes focus for a given node *)
 let rec with_focus focus node
@@ -133,8 +150,8 @@ let rec map_focus focus node
   let go ~is_focused ~is_parent_focused children n =
     match n with
     | Empty -> f ~is_focused ~is_parent_focused Empty
-    | Static (tag, items) -> f ~is_focused ~is_parent_focused (Static (tag, children))
-    | Dynamic (tag, items) -> f ~is_focused ~is_parent_focused (Dynamic (tag, children))
+    | Static (tag, _) -> f ~is_focused ~is_parent_focused (Static (tag, children))
+    | Dynamic (tag, _) -> f ~is_focused ~is_parent_focused (Dynamic (tag, children))
   in
   with_focus focus node go
 
