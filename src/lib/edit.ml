@@ -68,13 +68,17 @@ let update_debug state =
 
 let get_field_text f = Zed_edit.text f.engine |> Zed_rope.to_string
 
+let clear_field f =
+  Zed_edit.(get_action Delete_prev_line f.ctx); f
+
 let update state = function
   | Deeper -> (state_focus ^%= Focus.deeper) state |> update_debug, Cmd.none
   | Shallower -> (state_focus ^%= Focus.shallower) state |> update_debug, Cmd.none
   | Next -> (state_focus ^%= Focus.next) state |> update_debug, Cmd.none
   | Prev -> (state_focus ^%= Focus.prev) state |> update_debug, Cmd.none
   | ToInsert -> (state_mode ^= Insert) state, Cmd.none
-  | ToNormal -> (state_mode ^= Normal) state, Cmd.none
+  | ToNormal ->
+    state |> (state_mode ^= Normal) |> (state_field ^%= clear_field), Cmd.none
   | CommitCompletion ->
     let text = get_field_text state.field in
     let compl = match_completions text (Lang.completions |> List.map fst) in
@@ -83,7 +87,7 @@ let update state = function
        let ast = List.assoc ~eq:String.equal c Lang.completions in
        state |> (state_structure ^%= (fun s -> modify_ast state.focus s ast))
        |> (state_focus ^%= Focus.deeper)
-       |> (state_field ^%= (fun f -> Zed_edit.(get_action Delete_prev_line f.ctx); f))
+       |> (state_field ^%= clear_field)
      , Cmd.msg UpdateCompletions
      | _ -> state, Cmd.none
     )
