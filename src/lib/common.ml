@@ -8,6 +8,8 @@ let is_int s =
 module Styles = struct
   open Notty.A
   let keyword = fg red
+  let insert_mode = bg green ++ fg black
+  let normal_mode = bg yellow ++ fg black
   let hole = fg lightblack
   let normal = empty
   let focused = bg yellow ++ fg black

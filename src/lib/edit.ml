@@ -7,7 +7,14 @@ open Common
 type mode =
   | Insert
   | Normal
-[@@deriving show]
+
+let pp_mode fmt (m : mode) =
+  let s =
+    match m with
+    | Insert -> "Insert"
+    | Normal -> "Normal"
+  in Format.fprintf fmt "%s" s
+let show_mode x = Format.asprintf "%a" pp_mode x
 
 type field = {
   engine: unit Zed_edit.t;
@@ -122,12 +129,12 @@ let update state = function
   | PrevHole ->
     (match prev_postorder state.focus state.structure (fun n -> equal_node Lang.equal n Empty) with
      | None -> state, Cmd.none
-     | Some f -> (state_focus ^= f) state, Cmd.none
+     | Some f -> (state_focus ^= f) state |> update_debug, Cmd.none
     )
   | NextHole ->
     (match next_postorder state.focus state.structure (fun n -> equal_node Lang.equal n Empty) with
      | None -> state, Cmd.none
-     | Some f -> (state_focus ^= f) state, Cmd.none
+     | Some f -> (state_focus ^= f) state |> update_debug, Cmd.none
     )
   | ToInsert -> (state_mode ^= Insert) state, Cmd.none
   | ToNormal ->
@@ -194,7 +201,7 @@ let view state = Notty.(
       (* render_if 1 2 3 *)
       Lang.render state.focus state.structure;
       I.string Styles.normal state.debug;
-      I.string Styles.normal (state.mode |> show_mode);
+      I.string (match state.mode with Normal -> Styles.normal_mode | Insert -> Styles.insert_mode) (state.mode |> show_mode);
       render_field state;
       I.vcat (state.completions |> List.map (I.string Styles.normal));
     ] |> I.vcat
