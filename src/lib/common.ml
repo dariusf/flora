@@ -202,14 +202,17 @@ let modify_ast focus node insertion =
   in
   map_focus focus node f
 
+let is_empty = function
+  | Empty -> true
+  | _ -> false
+
 let uphold_invariants node =
   (* the initial focus given here doesn't matter as it's not used in f *)
   map_focus Focus.initial node (fun _ n ->
       match n with
-      | Dynamic (tag, children) when not (List.last_opt children
-                                          |> Option.map (function Empty -> true | _ -> false)
-                                          |> Option.get_or ~default:false) ->
-        Dynamic (tag, children @ [Empty])
+      | Dynamic (tag, children) ->
+        let c = children |> List.rev |> List.drop_while is_empty |> (fun xs -> Empty :: xs) |> List.rev in
+        Dynamic (tag, c)
       | _ -> n
     )
 
