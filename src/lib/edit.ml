@@ -55,7 +55,7 @@ type msg =
 let init () = {
   mode = Normal;
   focus = Focus.initial;
-  structure = Lang.example;
+  structure = Lang.example |> uphold_invariants;
   debug = Focus.show Focus.initial;
   field = (
     let engine = Zed_edit.create () in
@@ -149,7 +149,7 @@ let update state = function
     (match compl with
      | [c] ->
        let ast = List.assoc ~eq:String.equal c Lang.completions in
-       let ast1 = modify_ast state.focus state.structure ast in
+       let ast1 = modify_ast state.focus state.structure ast |> uphold_invariants in
        let old_ast = state.structure in
        let old_focus = state.focus in
        let s = state
@@ -207,15 +207,6 @@ let render_field state =
 
 let view state = Notty.(
     [
-      (* I.strf "counter: %d" counter; *)
-      (* I.string A.(fg lightred) "up - inc, down - dec, s - set to 42, r - reset, q - quit"; *)
-
-      (* (let a1 = A.(fg lightwhite ++ bg red) *)
-      (* and a2 = A.(fg red) in *)
-      (* I.(string a1 "Rad" <|> (string a2 "stuff!" |> vpad 1 0))) *)
-      (* ; *)
-
-      (* render_if 1 2 3 *)
       Lang.render state.focus state.structure;
       I.string Styles.normal state.debug;
       I.string (match state.mode with Normal -> Styles.normal_mode | Insert -> Styles.insert_mode) (state.mode |> show_mode);

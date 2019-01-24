@@ -96,6 +96,10 @@ module Simpl : Def = struct
       Empty;
     ])
 
-  let example = Static (If, [Empty; Empty; Empty])
+  let example = Static (If, [Empty;
+                             Dynamic (Block, [
+                                 Dynamic (Call "print", [Static (Bool true, []); Static (Bool false, [])]);
+                                 Empty;]);
+                             Empty])
 
 end

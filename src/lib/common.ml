@@ -157,6 +157,7 @@ let cata_focus focus node
   in run focus Focus.initial node
 
 let next_postorder focus node pred =
+  (* TODO not sure if this is a problem, but this impl cannot locate nodes which are children of the focal point *)
   let seen = ref false in
   let result = ref None in
   (* this relies on the left-to-right, bottom-up traversal order of cata_focus *)
@@ -200,6 +201,17 @@ let modify_ast focus node insertion =
       n
   in
   map_focus focus node f
+
+let uphold_invariants node =
+  (* the initial focus given here doesn't matter as it's not used in f *)
+  map_focus Focus.initial node (fun _ n ->
+      match n with
+      | Dynamic (tag, children) when not (List.last_opt children
+                                          |> Option.map (function Empty -> true | _ -> false)
+                                          |> Option.get_or ~default:false) ->
+        Dynamic (tag, children @ [Empty])
+      | _ -> n
+    )
 
 let match_completions term completions =
   completions |> List.filter (String.prefix ~pre:term)
