@@ -45,8 +45,8 @@ type msg =
   | Prev
   | NextHole
   | PrevHole
-  | ToInsert
-  | ToNormal
+  | InsertMode
+  | NormalMode
   | UpdateCompletions
   | Undo
   | CommitCompletion
@@ -78,7 +78,7 @@ let key_to_cmd = function
   | `ASCII 'u', _mods -> Cmd.msg Undo
   | `ASCII 'N', _mods -> Cmd.msg PrevHole
   | `ASCII 'n', _mods -> Cmd.msg NextHole
-  | `ASCII 'i', _mods -> Cmd.msg ToInsert
+  | `ASCII 'i', _mods -> Cmd.msg InsertMode
   | `ASCII 'q', _mods -> App.exit
   | _ -> Cmd.none
 
@@ -140,26 +140,33 @@ let update state = function
      | None -> state, Cmd.none
      | Some f -> (state_focus ^= f) state |> update_debug, Cmd.none
     )
-  | ToInsert -> (state_mode ^= Insert) state, Cmd.none
-  | ToNormal ->
+  | InsertMode -> (state_mode ^= Insert) state, Cmd.none
+  | NormalMode ->
     state |> (state_mode ^= Normal) |> (state_field ^%= clear_field), Cmd.none
   | CommitCompletion ->
     let text = get_field_text state.field in
-    let compl = match_completions text (Lang.completions |> List.map fst) in
+    let compl, literal =
+      match match_completions text (Lang.completions |> List.map fst) with
+      | [] -> parse_completions text Lang.more_completions, true
+      | [c] -> List.assoc_opt ~eq:String.equal c Lang.completions |> Option.to_list, false
+      | _ -> [], false
+    in
     (match compl with
-     | [c] ->
-       let ast = List.assoc ~eq:String.equal c Lang.completions in
+     | [ast] ->
        let ast1 = modify_ast state.focus state.structure ast |> uphold_invariants in
        let old_ast = state.structure in
        let old_focus = state.focus in
        let s = state
                |> (state_structure ^= ast1)
-               |> (state_focus ^%= Focus.deeper)
+               |> (state_focus ^%= (fun f -> if not literal then Focus.deeper f else f))
                |> (state_field ^%= clear_field)
                |> (state_undo ^%= (fun s -> ((old_ast, old_focus) :: s) |> List.take 5))
        in
-       s, Cmd.msg UpdateCompletions
-     | _ -> state, Cmd.none
+       (* s, Cmd.batch ([Cmd.msg UpdateCompletions] @ if literal then [Cmd.msg ToNormal] else []) *)
+       s, Cmd.batch ([Cmd.msg UpdateCompletions] @ if literal then [Cmd.msg NextHole] else [])
+     | _ ->
+       (* TODO print cannot geuess *)
+       state, Cmd.none
     )
   | Undo ->
     let s =
@@ -179,7 +186,7 @@ let update state = function
       match state.mode with
       | Insert -> (
           match key with
-          | `Escape, _mods -> state, Cmd.msg ToNormal
+          | `Escape, _mods -> state, Cmd.msg NormalMode
           | `Tab, _mods
           | `Enter, _mods -> state, Cmd.msg CommitCompletion
           | _ ->
@@ -211,7 +218,10 @@ let view state = Notty.(
       I.string Styles.normal state.debug;
       I.string (match state.mode with Normal -> Styles.normal_mode | Insert -> Styles.insert_mode) (state.mode |> show_mode);
       render_field state;
-      I.vcat (state.completions |> List.map (I.string Styles.normal));
+      (let compl = state.completions |> List.map (I.string Styles.normal) in
+       match compl with
+       | [] when not (String.is_empty (get_field_text state.field)) -> I.string Styles.normal "guess?"
+       | _ -> I.vcat compl);
     ] |> I.vcat
   )
 

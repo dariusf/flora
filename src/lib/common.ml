@@ -5,6 +5,16 @@ let is_int s =
   try ignore (int_of_string s); true
   with _ -> false
 
+module Char = struct
+  include Char
+  let (<=) a b = compare a b <= 0
+end
+
+let is_uppercase c = Char.('A' <= c && c <= 'Z')
+let is_lowercase c = Char.('a' <= c && c <= 'z')
+let is_letter c =
+  is_uppercase c || is_lowercase c
+
 module Styles = struct
   open Notty.A
   let keyword = fg red
@@ -218,3 +228,11 @@ let uphold_invariants node =
 
 let match_completions term completions =
   completions |> List.filter (String.prefix ~pre:term)
+
+let parse_completions : string -> (string -> 'a node option) list -> 'a node list = fun term more ->
+  let open Option in
+  List.fold_left (fun t c ->
+      match t with
+      | None -> c term
+      | Some _ -> t
+    ) None more |> to_list

@@ -8,6 +8,7 @@ module type Def = sig
 
   (* val draw : bool -> string -> Notty.image *)
   val completions : (string * t Common.node) list
+  val more_completions : (string -> t Common.node option) list
   val render : Focus.t -> t Common.node -> Notty.image
   val example : t Common.node
 end
@@ -17,9 +18,13 @@ module Simpl : Def = struct
   type t =
     | And
     | If
-    | Bool of bool
     | Call of string
     | Block
+    | Int of int
+    | Bool of bool
+    | Float of float
+    | Var of string
+    | String of string
   [@@deriving show, eq]
 
   let draw focus text =
@@ -46,6 +51,29 @@ module Simpl : Def = struct
     "if", Static (If, [Empty; Empty; Empty]);
     "and", Static (And, [Empty; Empty]);
   ]
+
+  let more_completions = [
+    Option.wrap (fun i -> Int (int_of_string i));
+    Option.wrap (fun f -> Float (float_of_string f));
+    Option.wrap (fun b -> Bool (bool_of_string b));
+    Option.wrap (fun s ->
+        let l = String.length s in
+        if Char.(equal s.[0] '"' && equal s.[l - 1] '"') then
+          String (String.sub s 1 (l - 2))
+        else
+          raise (Invalid_argument "not a string"));
+    Option.wrap (fun s ->
+        let l = String.length s in
+        if Char.(equal s.[0] '"' && equal s.[l - 1] '"') then
+          String (String.sub s 1 (l - 2))
+        else
+          raise (Invalid_argument "not a string"));
+    (fun v ->
+       if String.for_all (fun l -> is_letter l || Char.equal l '_') v then
+         Some (Var v)
+       else 
+         None);
+  ] |> List.map (fun c -> Fun.compose c (Option.map (fun b -> Static (b, []))))
 
   let render focus node =
     let open Notty.I in
@@ -76,6 +104,14 @@ module Simpl : Def = struct
           (draw is_parent_focused "}")
         | Bool b, [] ->
           draw is_parent_focused (string_of_bool b)
+        | Int i, [] ->
+          draw is_parent_focused (string_of_int i)
+        | Float f, [] ->
+          draw is_parent_focused (string_of_float f)
+        | String s, [] ->
+          draw is_parent_focused ("\"" ^ s ^ "\"")
+        | Var v, [] ->
+          draw is_parent_focused v
         | Call f, args ->
           draw is_parent_focused f <|>
           draw is_parent_focused "(" <|>
