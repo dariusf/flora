@@ -234,6 +234,12 @@ let term_resize () =
       |> Lwt_stream.iter (fun msg -> push (Some msg))
     )
 
+let crop_to w h image =
+  (* the semantics of overlaying make the composite width the max of the arguments, but we want it to  be the min *)
+  let open Notty.I in
+  let iw, ih = width image, height image in
+  crop ~l:0 ~r:(iw - w) ~t:0 ~b:(ih - h) image
+
 let view state =
   Notty.I.(
     let w, h = state.dimensions in
@@ -248,7 +254,7 @@ let view state =
        match compl with
        | [] when not (String.is_empty (get_field_text state.field)) -> string Styles.normal "guess?"
        | _ -> vcat compl);
-    ] |> vcat in
+    ] |> vcat |> crop_to (width main) (height main) in
     (editor </> main) <-> (string Styles.normal "lul" </> status)
   )
 
