@@ -28,6 +28,7 @@ let show_field x = Format.asprintf "%a" pp_field x
 module Lang = Lang.Simpl
 
 type state = {
+  dimensions: int * int;
   mode: mode;
   focus: Focus.t;
   structure: Lang.t node;
@@ -50,21 +51,30 @@ type msg =
   | UpdateCompletions
   | Undo
   | CommitCompletion
+  | Resize of int * int
   | Key of Notty.Unescape.key 
 
-let init () = {
-  mode = Normal;
-  focus = Focus.initial;
-  structure = Lang.example |> uphold_invariants;
-  debug = Focus.show Focus.initial;
-  field = (
-    let engine = Zed_edit.create () in
-    let cursor = Zed_edit.new_cursor engine in
-    let ctx = Zed_edit.context engine cursor in
-    { engine; cursor; ctx });
-  completions = [];
-  undo = [];
-}, Cmd.msg UpdateCompletions
+let init () =
+  let w, h =
+    (* TODO stderr *)
+    match Notty_unix.winsize Unix.stdout with
+    | None -> raise (Failure "not a tty, cannot determine window size")
+    | Some (w, h) -> w, h
+  in
+  {
+    dimensions = (w, h);
+    mode = Normal;
+    focus = Focus.initial;
+    structure = Lang.example |> uphold_invariants;
+    debug = Focus.show Focus.initial;
+    field = (
+      let engine = Zed_edit.create () in
+      let cursor = Zed_edit.new_cursor engine in
+      let ctx = Zed_edit.context engine cursor in
+      { engine; cursor; ctx });
+    completions = [];
+    undo = [];
+  }, Cmd.msg UpdateCompletions
 
 let key_to_cmd = function
   | `Arrow `Up, _mods
@@ -182,6 +192,7 @@ let update state = function
       else match_completions text (Lang.completions |> List.map fst)
     in
     (state_completions ^= compl) state, Cmd.none
+  | Resize (w, h) -> (state_dimensions ^= (w, h)) state, Cmd.none
   | Key key -> (
       match state.mode with
       | Insert -> (
@@ -212,21 +223,40 @@ let render_field state =
   in
   string Styles.normal text <|> cursor
 
-let view state = Notty.(
-    [
+let term_resize () =
+  Sub.registration "terminal:resize" (fun { push; term; } ->
+      Notty_lwt.Term.events term
+      |> Lwt_stream.filter_map
+        (function
+          | `Resize (w, h) -> Some (Resize (w, h))
+          | _ -> None
+        )
+      |> Lwt_stream.iter (fun msg -> push (Some msg))
+    )
+
+let view state =
+  Notty.I.(
+    let w, h = state.dimensions in
+    let main = void w (h - 1) in
+    let status = void w 1 in
+    let editor = [
       Lang.render state.focus state.structure;
-      I.string Styles.normal state.debug;
-      I.string (match state.mode with Normal -> Styles.normal_mode | Insert -> Styles.insert_mode) (state.mode |> show_mode);
+      string Styles.normal state.debug;
+      string (match state.mode with Normal -> Styles.normal_mode | Insert -> Styles.insert_mode) (state.mode |> show_mode);
       render_field state;
-      (let compl = state.completions |> List.map (I.string Styles.normal) in
+      (let compl = state.completions |> List.map (string Styles.normal) in
        match compl with
-       | [] when not (String.is_empty (get_field_text state.field)) -> I.string Styles.normal "guess?"
-       | _ -> I.vcat compl);
-    ] |> I.vcat
+       | [] when not (String.is_empty (get_field_text state.field)) -> string Styles.normal "guess?"
+       | _ -> vcat compl);
+    ] |> vcat in
+    (editor </> main) <-> (string Styles.normal "lul" </> status)
   )
 
 let subscriptions _model =
-  Keyboard.presses (fun key -> Key key)
+  Sub.batch [
+    Keyboard.presses (fun key -> Key key);
+    term_resize ();
+  ]
 
 let main () =
   App.run {
