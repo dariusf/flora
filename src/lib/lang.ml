@@ -2,7 +2,17 @@
 open Containers
 open Common
 
-module Simpl = struct
+module type Def = sig
+  type t
+  [@@deriving show, eq]
+
+  (* val draw : bool -> string -> Notty.image *)
+  val completions : (string * t Common.node) list
+  val render : Focus.t -> t Common.node -> Notty.image
+  val example : t Common.node
+end
+
+module Simpl : Def = struct
 
   type t =
     | And
