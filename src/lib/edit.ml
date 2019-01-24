@@ -34,6 +34,7 @@ type state = {
   debug: string;
   field: field;
   completions: string list;
+  undo: (Lang.t node * Focus.t) list;
 }
 [@@deriving lens, show]
 
@@ -47,6 +48,7 @@ type msg =
   | ToInsert
   | ToNormal
   | UpdateCompletions
+  | Undo
   | CommitCompletion
   | Key of Notty.Unescape.key 
 
@@ -61,6 +63,7 @@ let init () = {
     let ctx = Zed_edit.context engine cursor in
     { engine; cursor; ctx });
   completions = [];
+  undo = [];
 }, Cmd.msg UpdateCompletions
 
 let key_to_cmd = function
@@ -72,6 +75,7 @@ let key_to_cmd = function
   | `ASCII 'h', _mods -> Cmd.msg Prev
   | `Arrow `Right, _mods
   | `ASCII 'l', _mods -> Cmd.msg Next
+  | `ASCII 'u', _mods -> Cmd.msg Undo
   | `ASCII 'N', _mods -> Cmd.msg PrevHole
   | `ASCII 'n', _mods -> Cmd.msg NextHole
   | `ASCII 'i', _mods -> Cmd.msg ToInsert
@@ -145,12 +149,25 @@ let update state = function
     (match compl with
      | [c] ->
        let ast = List.assoc ~eq:String.equal c Lang.completions in
-       state |> (state_structure ^%= (fun s -> modify_ast state.focus s ast))
-       |> (state_focus ^%= Focus.deeper)
-       |> (state_field ^%= clear_field)
-     , Cmd.msg UpdateCompletions
+       let ast1 = modify_ast state.focus state.structure ast in
+       let old_ast = state.structure in
+       let old_focus = state.focus in
+       let s = state
+               |> (state_structure ^= ast1)
+               |> (state_focus ^%= Focus.deeper)
+               |> (state_field ^%= clear_field)
+               |> (state_undo ^%= (fun s -> ((old_ast, old_focus) :: s) |> List.take 5))
+       in
+       s, Cmd.msg UpdateCompletions
      | _ -> state, Cmd.none
     )
+  | Undo ->
+    let s =
+      match state.undo with
+      | [] -> state
+      | (s1, f) :: rest -> state |> (state_structure ^= s1) |> (state_undo ^= rest) |> (state_focus ^= f)
+    in
+    s, Cmd.none
   | UpdateCompletions ->
     let text = get_field_text state.field in
     let compl =
