@@ -25,6 +25,7 @@ module Styles = struct
   let focused = bg yellow ++ fg black
   let value = fg (Notty.A.rgb_888 147 112 219)
   let cursor = bg lightblack
+  let highlighted = fg red
 end
 
 type 'a node =

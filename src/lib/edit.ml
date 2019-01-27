@@ -34,10 +34,10 @@ type state = {
   structure: Lang.t node;
   debug: string;
   field: field;
-  completions: string list;
+  completions: Notty.image list;
   undo: (Lang.t node * Focus.t) list;
 }
-[@@deriving lens, show]
+[@@deriving lens]
 
 type msg =
   | Deeper
@@ -108,7 +108,9 @@ let clear_field f =
   Zed_edit.(get_action Delete_prev_line f.ctx); f
 
 let match_completions term completions =
-  completions |> Fuzzy.String.rank ~pattern:term |> List.map (fun f -> f.Fuzzy.String.rendered)
+  completions
+  |> Fuzzy.Image.rank ~around:(fun c -> [Notty.I.string Styles.highlighted (String.of_char c)]) ~pattern:term
+  |> List.map (fun f -> f.Fuzzy.Image.original, f.rendered)
 
 let update state = function
   | Deeper ->
@@ -161,7 +163,7 @@ let update state = function
     let compl, literal =
       match match_completions text (Lang.completions |> List.map fst) with
       | [] -> parse_completions text Lang.more_completions, true
-      | [c] -> List.assoc_opt ~eq:String.equal c Lang.completions |> Option.to_list, false
+      | [c, image] -> List.assoc_opt ~eq:String.equal c Lang.completions |> Option.to_list, false
       | _ -> [], false
     in
     (match compl with
@@ -192,7 +194,7 @@ let update state = function
     let text = get_field_text state.field in
     let compl =
       if String.is_empty text then []
-      else match_completions text (Lang.completions |> List.map fst)
+      else match_completions text (Lang.completions |> List.map fst) |> List.map snd
     in
     (state_completions ^= compl) state, Cmd.none
   | Resize (w, h) -> (state_dimensions ^= (w, h)) state, Cmd.none
@@ -253,7 +255,7 @@ let view state =
       string Styles.normal state.debug;
       string (match state.mode with Normal -> Styles.normal_mode | Insert -> Styles.insert_mode) (state.mode |> show_mode);
       render_field state;
-      (let compl = state.completions |> List.map (string Styles.normal) in
+      (let compl = state.completions in
        match compl with
        | [] when not (String.is_empty (get_field_text state.field)) -> string Styles.normal "<no matches; guess?>"
        | _ -> vcat compl);

@@ -41,8 +41,8 @@ module F (T : T) = struct
       | [] -> Some { original = candidate; rendered = result; score = totalScore }
       | _ -> None
 
-  let rank ~pattern candidates =
-    List.map (fun c -> search ~pattern c) candidates
+  let rank ~around ~pattern candidates =
+    List.map (fun c -> search ~around ~pattern c) candidates
     |> List.filter Option.is_some
     |> List.map Option.get_exn
     |> List.sort (fun a b -> compare a.score b.score)
