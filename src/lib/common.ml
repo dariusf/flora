@@ -226,9 +226,6 @@ let uphold_invariants node =
       | _ -> n
     )
 
-let match_completions term completions =
-  completions |> List.filter (String.prefix ~pre:term)
-
 let parse_completions : string -> (string -> 'a node option) list -> 'a node list = fun term more ->
   let open Option in
   List.fold_left (fun t c ->

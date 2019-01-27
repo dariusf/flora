@@ -107,6 +107,9 @@ let get_field_text f = Zed_edit.text f.engine |> Zed_rope.to_string
 let clear_field f =
   Zed_edit.(get_action Delete_prev_line f.ctx); f
 
+let match_completions term completions =
+  completions |> Fuzzy.String.rank ~pattern:term |> List.map (fun f -> f.Fuzzy.String.rendered)
+
 let update state = function
   | Deeper ->
     let f1 = Focus.deeper state.focus in
@@ -252,7 +255,7 @@ let view state =
       render_field state;
       (let compl = state.completions |> List.map (string Styles.normal) in
        match compl with
-       | [] when not (String.is_empty (get_field_text state.field)) -> string Styles.normal "guess?"
+       | [] when not (String.is_empty (get_field_text state.field)) -> string Styles.normal "<no matches; guess?>"
        | _ -> vcat compl);
     ] |> vcat |> crop_to (width main) (height main) in
     (editor </> main) <-> (string Styles.normal "lul" </> status)
