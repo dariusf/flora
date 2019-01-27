@@ -8,7 +8,7 @@ module type Def = sig
 
   (* val draw : bool -> string -> Notty.image *)
   val completions : (string * t Common.node) list
-  val more_completions : (string -> t Common.node option) list
+  val guessed_completions : (string -> t Common.node option) list
   val render : Focus.t -> t Common.node -> Notty.image
   val example : t Common.node
 end
@@ -25,6 +25,7 @@ module Simpl : Def = struct
     | Float of float
     | Var of string
     | String of string
+    | Op of string
   [@@deriving show, eq]
 
   let draw focus text =
@@ -50,9 +51,12 @@ module Simpl : Def = struct
   let completions = [
     "if", Static (If, [Empty; Empty; Empty]);
     "and", Static (And, [Empty; Empty]);
+    "&&", Static (Op "&&", [Empty; Empty]);
+    "=", Static (Op "=", [Empty; Empty]);
+    "+", Static (Op "+", [Empty; Empty]);
   ]
 
-  let more_completions = [
+  let guessed_completions = [
     Option.wrap (fun i -> Int (int_of_string i));
     Option.wrap (fun f -> Float (float_of_string f));
     Option.wrap (fun b -> Bool (bool_of_string b));
@@ -117,6 +121,11 @@ module Simpl : Def = struct
           draw is_parent_focused "(" <|>
           hcat (List.intersperse (draw is_parent_focused ", ") args) <|>
           draw is_parent_focused ")"
+        | Op name, [left; right] ->
+          hcat (List.intersperse (draw is_parent_focused " ") [
+              left;
+              draw is_parent_focused name;
+              right])
         | Block, args ->
           List.map (fun s -> s <|> draw is_parent_focused ";") args |> vcat
         | _ -> failwith ("invalid combination of args: " ^ show_node pp node ^ " and " ^ string_of_int (List.length fs))

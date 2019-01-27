@@ -162,7 +162,7 @@ let update state = function
     let text = get_field_text state.field in
     let compl, literal =
       match match_completions text (Lang.completions |> List.map fst) with
-      | [] -> parse_completions text Lang.more_completions, true
+      | [] -> parse_completions text Lang.guessed_completions, true
       | [c, image] -> List.assoc_opt ~eq:String.equal c Lang.completions |> Option.to_list, false
       | _ -> [], false
     in
@@ -180,7 +180,7 @@ let update state = function
        (* s, Cmd.batch ([Cmd.msg UpdateCompletions] @ if literal then [Cmd.msg ToNormal] else []) *)
        s, Cmd.batch ([Cmd.msg UpdateCompletions] @ if literal then [Cmd.msg NextHole] else [])
      | _ ->
-       (* TODO print cannot geuess *)
+       (* TODO print cannot guess *)
        state, Cmd.none
     )
   | Undo ->
