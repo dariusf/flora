@@ -73,7 +73,7 @@ module Simpl : Def = struct
         else
           raise (Invalid_argument "not a string"));
     (fun v ->
-       if String.for_all (fun l -> is_letter l || Char.equal l '_') v then
+       if not (String.is_empty v) && String.for_all (fun l -> is_letter l || Char.equal l '_') v then
          Some (Var v)
        else 
          None);
