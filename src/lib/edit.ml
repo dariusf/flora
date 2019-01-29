@@ -34,7 +34,7 @@ type state = {
   structure: Lang.t node;
   debug: string;
   field: field;
-  completions: Notty.image list;
+  completions: (string * Notty.image) list;
   undo: (Lang.t node * Focus.t) list;
 }
 [@@deriving lens]
@@ -161,7 +161,7 @@ let update state = function
   | CommitCompletion ->
     let text = get_field_text state.field in
     let compl, literal =
-      match match_completions text (Lang.completions |> List.map fst) with
+      match state.completions with
       | [] -> parse_completions text Lang.guessed_completions, true
       | [c, image] -> List.assoc_opt ~eq:String.equal c Lang.completions |> Option.to_list, false
       | _ -> [], false
@@ -194,7 +194,7 @@ let update state = function
     let text = get_field_text state.field in
     let compl =
       if String.is_empty text then []
-      else match_completions text (Lang.completions |> List.map fst) |> List.map snd
+      else match_completions text (Lang.completions |> List.map fst)
     in
     (state_completions ^= compl) state, Cmd.none
   | Resize (w, h) -> (state_dimensions ^= (w, h)) state, Cmd.none
@@ -255,7 +255,7 @@ let view state =
       string Styles.normal state.debug;
       string (match state.mode with Normal -> Styles.normal_mode | Insert -> Styles.insert_mode) (state.mode |> show_mode);
       render_field state;
-      (let compl = state.completions in
+      (let compl = state.completions |> List.map snd in
        match compl with
        | [] when not (String.is_empty (get_field_text state.field)) -> string Styles.normal "<no matches; guess?>"
        | _ -> vcat compl);
