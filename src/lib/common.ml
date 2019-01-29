@@ -28,15 +28,30 @@ module Styles = struct
   let highlighted = fg red
 end
 
-type 'a node =
-  | Empty
-  | Static of 'a * 'a node list
-  | Dynamic of 'a * 'a node list
-[@@deriving show, eq]
+module Node_ = struct
+  type 'a t =
+    | Empty of ('a t -> bool)
+    | Static of 'a * 'a t list
+    | Dynamic of 'a * 'a t list
+  [@@deriving show]
+
+  let empty ?(pred=fun _ -> true) () = Empty pred
+
+  let is_empty = function
+    | Empty _ -> true
+    | _ -> false
+end
 
 module Focus : sig
   type t
   [@@deriving show]
+
+  type view = {
+    is_focused: bool;
+    is_parent_focused: bool;
+    focus_relative: t;
+    path_from_root: t;
+  }
 
   val initial : t
   val is_focused : t -> bool
@@ -48,10 +63,8 @@ module Focus : sig
   val on_last : t -> (int -> int) -> t
   val next : t -> t
   val prev : t -> t
-
-  (* TODO this depends on nodes and maybe shouldn't be here *)
-  val validate : t -> 'a node -> bool
   val add : int -> t -> t
+  val validate : t -> 'a Node_.t -> bool
 end = struct
   module D = CCFQueue
   (**
@@ -62,6 +75,13 @@ end = struct
   *)
   type t = Nope | ByParent | F of int D.t
   [@@deriving show]
+
+  type view = {
+    is_focused: bool;
+    is_parent_focused: bool;
+    focus_relative: t;
+    path_from_root: t;
+  }
 
   let initial =
     F D.empty
@@ -123,7 +143,7 @@ end = struct
 
   let rec validate (F d) node =
     match node with
-    | Empty -> D.is_empty d
+    | Node_.Empty _ -> D.is_empty d
     | Static (_, children)
     | Dynamic (_, children) ->
       (match D.take_front d with
@@ -139,95 +159,103 @@ let logfile = open_out "log.ignore"
 let log s =
   IO.write_line logfile s; flush logfile
 
-type focus_view = {
-  is_focused: bool;
-  is_parent_focused: bool;
-  focus_relative: Focus.t;
-  path_from_root: Focus.t;
-}
+module Node = struct
 
-(** A catamorphism which also computes focus for a given node *)
-let cata_focus focus node
-    (f : focus_view -> 'b Containers.List.t -> 'a node -> 'b) =
-  let rec run relative path node =
-    let foc = {
-      is_focused = Focus.is_focused relative;
-      is_parent_focused = Focus.is_parent_focused relative;
-      focus_relative = relative;
-      path_from_root = path
-    } in
-    match node with
-    | Empty ->
-      f foc [] node
-    | Static (tag, items)
-    | Dynamic (tag, items) ->
-      let child_results = List.mapi (fun i e ->
-          run (Focus.view_deeper relative i) (Focus.add i path) e
-        ) items in
-      f foc child_results node
-  in run focus Focus.initial node
+  include Node_
 
-let next_postorder focus node pred =
-  (* TODO not sure if this is a problem, but this impl cannot locate nodes which are children of the focal point *)
-  let seen = ref false in
-  let result = ref None in
-  (* this relies on the left-to-right, bottom-up traversal order of cata_focus *)
-  cata_focus focus node (fun foc _ node ->
-      if foc.is_focused then
-        seen := true
-      else if !seen && Option.is_none !result && pred node then
-        result := Some (foc.path_from_root)
-      else ()
-    );
-  !result
+  (** A catamorphism which also computes focus for a given node *)
+  let cata_focus focus node
+      (f : Focus.view -> 'b Containers.List.t -> 'a t -> 'b) =
+    let rec run relative path node =
+      let foc = {
+        Focus.is_focused = Focus.is_focused relative;
+        is_parent_focused = Focus.is_parent_focused relative;
+        focus_relative = relative;
+        path_from_root = path
+      } in
+      match node with
+      | Empty _ ->
+        f foc [] node
+      | Static (tag, items)
+      | Dynamic (tag, items) ->
+        let child_results = List.mapi (fun i e ->
+            run (Focus.view_deeper relative i) (Focus.add i path) e
+          ) items in
+        f foc child_results node
+    in run focus Focus.initial node
 
-let prev_postorder focus node pred =
-  let prev = ref None in
-  let result = ref None in
-  (* also relies on traversal order *)
-  cata_focus focus node (fun foc _ node ->
-      if not foc.is_focused && pred node && Option.is_none !result then
-        prev := Some (foc.path_from_root)
-      else if foc.is_focused then
-        result := !prev
-      else ()
-    );
-  !result
+  let next_postorder focus node pred =
+    (* TODO not sure if this is a problem, but this impl cannot locate nodes which are children of the focal point *)
+    let seen = ref false in
+    let result = ref None in
+    (* this relies on the left-to-right, bottom-up traversal order of cata_focus *)
+    cata_focus focus node (fun foc _ node ->
+        if foc.is_focused then
+          seen := true
+        else if !seen && Option.is_none !result && pred node then
+          result := Some (foc.path_from_root)
+        else ()
+      );
+    !result
 
-let rec map_focus focus node
-    (f : focus_view -> 'a node -> 'b node) =
-  let go foc children n =
-    match n with
-    | Empty -> f foc Empty
-    | Static (tag, _) -> f foc (Static (tag, children))
-    | Dynamic (tag, _) -> f foc (Dynamic (tag, children))
-  in
-  cata_focus focus node go
+  let prev_postorder focus node pred =
+    let prev = ref None in
+    let result = ref None in
+    (* also relies on traversal order *)
+    cata_focus focus node (fun foc _ node ->
+        if not foc.is_focused && pred node && Option.is_none !result then
+          prev := Some (foc.path_from_root)
+        else if foc.is_focused then
+          result := !prev
+        else ()
+      );
+    !result
 
-let modify_ast focus node insertion =
-  let f foc n =
-    if foc.is_focused then
-      insertion
-    else
-      n
-  in
-  map_focus focus node f
-
-let is_empty = function
-  | Empty -> true
-  | _ -> false
-
-let uphold_invariants node =
-  (* the initial focus given here doesn't matter as it's not used in f *)
-  map_focus Focus.initial node (fun _ n ->
+  let map_focus focus node
+      (f : Focus.view -> 'a t -> 'b t) =
+    let go foc children n =
       match n with
-      | Dynamic (tag, children) ->
-        let c = children |> List.rev |> List.drop_while is_empty |> (fun xs -> Empty :: xs) |> List.rev in
-        Dynamic (tag, c)
-      | _ -> n
-    )
+      | Empty p -> f foc (Empty p)
+      | Static (tag, _) -> f foc (Static (tag, children))
+      | Dynamic (tag, _) -> f foc (Dynamic (tag, children))
+    in
+    cata_focus focus node go
 
-let parse_completions : string -> (string -> 'a node option) list -> 'a node list = fun term more ->
+  let modify focus node insertion =
+    let f foc n =
+      if foc.Focus.is_focused then
+        insertion
+      else
+        n
+    in
+    map_focus focus node f
+
+  let get focus node =
+    cata_focus focus node (fun f children this ->
+        if f.is_focused then
+          [this]
+        else
+          List.concat children
+      )
+    |> (fun ns ->
+        try
+          List.hd
+        with Failure _ ->
+          raise (Invalid_argument "get_ast: focus invalid")
+      )
+
+  let uphold_invariants node =
+    (* the initial focus given here doesn't matter as it's not used in f *)
+    map_focus Focus.initial node (fun _ n ->
+        match n with
+        | Dynamic (tag, children) ->
+          let c = children |> List.rev |> List.drop_while is_empty |> (fun xs -> (empty ()) :: xs) |> List.rev in
+          Dynamic (tag, c)
+        | _ -> n
+      )
+end
+
+let parse_completions : string -> (string -> 'a Node.t option) list -> 'a Node.t list = fun term more ->
   let open Option in
   List.fold_left (fun t c ->
       match t with

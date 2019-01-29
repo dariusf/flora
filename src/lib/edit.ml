@@ -31,11 +31,11 @@ type state = {
   dimensions: int * int;
   mode: mode;
   focus: Focus.t;
-  structure: Lang.t node;
+  structure: Lang.t Node.t;
   debug: string;
   field: field;
   completions: (string * Notty.image) list;
-  undo: (Lang.t node * Focus.t) list;
+  undo: (Lang.t Node.t * Focus.t) list;
 }
 [@@deriving lens]
 
@@ -65,7 +65,7 @@ let init () =
     dimensions = (w, h);
     mode = Normal;
     focus = Focus.initial;
-    structure = Lang.example |> uphold_invariants;
+    structure = Lang.example |> Node.uphold_invariants;
     debug = Focus.show Focus.initial;
     field = (
       let engine = Zed_edit.create () in
@@ -95,7 +95,7 @@ let key_to_cmd = function
 let update_debug state =
   let d = Focus.show state.focus in
   let d1 =
-    match next_postorder state.focus state.structure (fun n -> equal_node Lang.equal n Empty) with
+    match Node.next_postorder state.focus state.structure Node.is_empty with
     | None -> "no next node"
     | Some f -> Focus.show f
   in
@@ -107,8 +107,11 @@ let get_field_text f = Zed_edit.text f.engine |> Zed_rope.to_string
 let clear_field f =
   Zed_edit.(get_action Delete_prev_line f.ctx); f
 
-let match_completions term completions =
+let match_completions hole term completions =
   completions
+  (* get pred from hole, run against each completion again *)
+  (* |> List.filter *)
+  |> List.map fst
   |> Fuzzy.Image.rank ~around:(fun c -> [Notty.I.string Styles.highlighted (String.of_char c)]) ~pattern:term
   |> List.map (fun f -> f.Fuzzy.Image.original, f.rendered)
 
@@ -146,12 +149,12 @@ let update state = function
     in
     s1 |> update_debug, Cmd.none
   | PrevHole ->
-    (match prev_postorder state.focus state.structure (fun n -> equal_node Lang.equal n Empty) with
+    (match Node.prev_postorder state.focus state.structure Node.is_empty with
      | None -> state, Cmd.none
      | Some f -> (state_focus ^= f) state |> update_debug, Cmd.none
     )
   | NextHole ->
-    (match next_postorder state.focus state.structure (fun n -> equal_node Lang.equal n Empty) with
+    (match Node.next_postorder state.focus state.structure Node.is_empty with
      | None -> state, Cmd.none
      | Some f -> (state_focus ^= f) state |> update_debug, Cmd.none
     )
@@ -168,7 +171,7 @@ let update state = function
     in
     (match compl with
      | [ast] ->
-       let ast1 = modify_ast state.focus state.structure ast |> uphold_invariants in
+       let ast1 = Node.modify state.focus state.structure ast |> Node.uphold_invariants in
        let old_ast = state.structure in
        let old_focus = state.focus in
        let s = state
@@ -192,9 +195,10 @@ let update state = function
     s, Cmd.none
   | UpdateCompletions ->
     let text = get_field_text state.field in
+    let hole = Node.get state.focus state.structure in
     let compl =
       if String.is_empty text then []
-      else match_completions text (Lang.completions |> List.map fst)
+      else match_completions hole text Lang.completions
     in
     (state_completions ^= compl) state, Cmd.none
   | Resize (w, h) -> (state_dimensions ^= (w, h)) state, Cmd.none

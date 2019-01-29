@@ -7,10 +7,10 @@ module type Def = sig
   [@@deriving show, eq]
 
   (* val draw : bool -> string -> Notty.image *)
-  val completions : (string * t Common.node) list
-  val guessed_completions : (string -> t Common.node option) list
-  val render : Focus.t -> t Common.node -> Notty.image
-  val example : t Common.node
+  val completions : (string * t Node.t) list
+  val guessed_completions : (string -> t Node.t option) list
+  val render : Focus.t -> t Node.t -> Notty.image
+  val example : t Node.t
 end
 
 module Simpl : Def = struct
@@ -48,13 +48,13 @@ module Simpl : Def = struct
     in
     string s text
 
-  let completions = [
-    "if", Static (If, [Empty; Empty; Empty]);
-    "and", Static (And, [Empty; Empty]);
-    "&&", Static (Op "&&", [Empty; Empty]);
-    "=", Static (Op "=", [Empty; Empty]);
-    "+", Static (Op "+", [Empty; Empty]);
-  ]
+  let completions = Node.[
+      "if", Static (If, [empty (); empty (); empty ()]);
+      "and", Static (And, [empty (); empty ()]);
+      "&&", Static (Op "&&", [empty (); empty ()]);
+      "=", Static (Op "=", [empty (); empty ()]);
+      "+", Static (Op "+", [empty (); empty ()]);
+    ]
 
   let guessed_completions = [
     Option.wrap (fun i -> Int (int_of_string i));
@@ -77,13 +77,13 @@ module Simpl : Def = struct
          Some (Var v)
        else 
          None);
-  ] |> List.map (fun c -> Fun.compose c (Option.map (fun b -> Static (b, []))))
+  ] |> List.map (fun c -> Fun.compose c (Option.map (fun b -> Node.Static (b, []))))
 
   let render focus node =
     let open Notty.I in
-    let f { is_parent_focused } fs node =
+    let f Focus.{ is_parent_focused } fs node =
       match node with
-      | Empty -> draw is_parent_focused "..."
+      | Node.Empty _ -> draw is_parent_focused "..."
       | Static (tag, _)
       | Dynamic (tag, _) ->
         match tag, fs with
@@ -128,23 +128,23 @@ module Simpl : Def = struct
               right])
         | Block, args ->
           List.map (fun s -> s <|> draw is_parent_focused ";") args |> vcat
-        | _ -> failwith ("invalid combination of args: " ^ show_node pp node ^ " and " ^ string_of_int (List.length fs))
+        | _ -> failwith ("invalid combination of args: " ^ Node.show pp node ^ " and " ^ string_of_int (List.length fs))
     in
-    cata_focus focus node f
+    Node.cata_focus focus node f
 
-  let example = Static (If, [
+  let example = Node.(Static (If, [
       Static (And,
               [Static (Bool true, []); Static (Bool false, [])]);
       Dynamic (Block, [
           Dynamic (Call "print", [Static (Bool true, []); Static (Bool false, [])]);
-          Empty;]);
-      Empty;
-    ])
+          empty ();]);
+      empty ();
+    ]))
 
-  let example = Static (If, [Empty;
-                             Dynamic (Block, [
-                                 Dynamic (Call "print", [Static (Bool true, []); Static (Bool false, [])]);
-                               ]);
-                             Empty])
+  let example = Node.(Static (If, [empty ();
+                                   Dynamic (Block, [
+                                       Dynamic (Call "print", [Static (Bool true, []); Static (Bool false, [])]);
+                                     ]);
+                                   empty ()]))
 
 end
