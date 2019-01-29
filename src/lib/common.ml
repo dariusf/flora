@@ -40,6 +40,14 @@ module Node_ = struct
   let is_empty = function
     | Empty _ -> true
     | _ -> false
+
+  let tag = function
+    | Empty _ -> raise (Invalid_argument "no tag")
+    | Static (t, _) | Dynamic (t, _) -> t
+
+  let predicate = function
+    | Empty p -> p
+    | _ -> raise (Invalid_argument "no predicate")
 end
 
 module Focus : sig
@@ -239,17 +247,17 @@ module Node = struct
       )
     |> (fun ns ->
         try
-          List.hd
+          List.hd ns
         with Failure _ ->
           raise (Invalid_argument "get_ast: focus invalid")
       )
 
-  let uphold_invariants node =
+  let uphold_invariants generate_holes node =
     (* the initial focus given here doesn't matter as it's not used in f *)
     map_focus Focus.initial node (fun _ n ->
         match n with
         | Dynamic (tag, children) ->
-          let c = children |> List.rev |> List.drop_while is_empty |> (fun xs -> (empty ()) :: xs) |> List.rev in
+          let c = children |> List.rev |> List.drop_while is_empty |> (fun xs -> generate_holes tag :: xs) |> List.rev in
           Dynamic (tag, c)
         | _ -> n
       )
@@ -262,3 +270,6 @@ let parse_completions : string -> (string -> 'a Node.t option) list -> 'a Node.t
       | None -> c term
       | Some _ -> t
     ) None more |> to_list
+
+type 'a node = 'a Node.t
+type focus = Focus.t

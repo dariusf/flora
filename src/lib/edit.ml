@@ -65,7 +65,7 @@ let init () =
     dimensions = (w, h);
     mode = Normal;
     focus = Focus.initial;
-    structure = Lang.example |> Node.uphold_invariants;
+    structure = Lang.example |> Node.uphold_invariants Lang.generate_holes;
     debug = Focus.show Focus.initial;
     field = (
       let engine = Zed_edit.create () in
@@ -108,9 +108,10 @@ let clear_field f =
   Zed_edit.(get_action Delete_prev_line f.ctx); f
 
 let match_completions hole term completions =
+  let p = Node.predicate hole in
+  (* get pred from hole and test each completion *)
   completions
-  (* get pred from hole, run against each completion again *)
-  (* |> List.filter *)
+  |> List.filter (fun (_, n) -> p n)
   |> List.map fst
   |> Fuzzy.Image.rank ~around:(fun c -> [Notty.I.string Styles.highlighted (String.of_char c)]) ~pattern:term
   |> List.map (fun f -> f.Fuzzy.Image.original, f.rendered)
@@ -171,7 +172,7 @@ let update state = function
     in
     (match compl with
      | [ast] ->
-       let ast1 = Node.modify state.focus state.structure ast |> Node.uphold_invariants in
+       let ast1 = Node.modify state.focus state.structure ast |> Node.uphold_invariants Lang.generate_holes in
        let old_ast = state.structure in
        let old_focus = state.focus in
        let s = state

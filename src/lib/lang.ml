@@ -7,10 +7,11 @@ module type Def = sig
   [@@deriving show, eq]
 
   (* val draw : bool -> string -> Notty.image *)
-  val completions : (string * t Node.t) list
-  val guessed_completions : (string -> t Node.t option) list
-  val render : Focus.t -> t Node.t -> Notty.image
-  val example : t Node.t
+  val completions : (string * t node) list
+  val guessed_completions : (string -> t node option) list
+  val generate_holes : t -> t node
+  val render : focus -> t node -> Notty.image
+  val example : t node
 end
 
 module Simpl : Def = struct
@@ -48,12 +49,42 @@ module Simpl : Def = struct
     in
     string s text
 
+  let is_expression n =
+    match Node.tag n with
+    | Call _ | Int _ | Bool _ | Float _ | Var _ | String _ | Op _ | And -> true
+    | If | Block -> false
+
+  let is_statement n = not (is_expression n)
+
+  let generate_holes t =
+    let open Node in
+    match t with
+    | Block -> empty ~pred:is_statement ()
+    | Call _ -> empty ~pred:is_expression ()
+    | _ -> empty ()
+
   let completions = Node.[
-      "if", Static (If, [empty (); empty (); empty ()]);
-      "and", Static (And, [empty (); empty ()]);
-      "&&", Static (Op "&&", [empty (); empty ()]);
-      "=", Static (Op "=", [empty (); empty ()]);
-      "+", Static (Op "+", [empty (); empty ()]);
+      "if", Static (If, [
+          empty ~pred:is_expression ();
+          empty ~pred:is_statement ();
+          empty ~pred:is_statement ()
+        ]);
+      "and", Static (And, [
+          empty ~pred:is_expression ();
+          empty ~pred:is_expression ()
+        ]);
+      "&&", Static (Op "&&", [
+          empty ~pred:is_expression ();
+          empty ~pred:is_expression ()
+        ]);
+      "=", Static (Op "=", [
+          empty ~pred:is_expression ();
+          empty ~pred:is_expression ()
+        ]);
+      "+", Static (Op "+", [
+          empty ~pred:is_expression ();
+          empty ~pred:is_expression ()
+        ]);
     ]
 
   let guessed_completions = [
@@ -141,10 +172,10 @@ module Simpl : Def = struct
       empty ();
     ]))
 
-  let example = Node.(Static (If, [empty ();
+  let example = Node.(Static (If, [empty ~pred:is_expression ();
                                    Dynamic (Block, [
                                        Dynamic (Call "print", [Static (Bool true, []); Static (Bool false, [])]);
                                      ]);
-                                   empty ()]))
+                                   empty ~pred:is_statement ()]))
 
 end
