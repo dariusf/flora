@@ -35,19 +35,27 @@ module Node_ = struct
     | Dynamic of 'a * 'a t list
   [@@deriving show]
 
+  let debug_show n =
+    match n with
+    | Empty _ -> "empty"
+    | Static _ -> "static"
+    | Dynamic _ -> "dynamic"
+
   let empty ?(pred=fun _ -> true) () = Empty pred
 
   let is_empty = function
     | Empty _ -> true
     | _ -> false
 
-  let tag = function
-    | Empty _ -> raise (Invalid_argument "no tag")
+  let tag n =
+    match n with
+    | Empty _ -> raise (Invalid_argument ("no tag: " ^ debug_show n))
     | Static (t, _) | Dynamic (t, _) -> t
 
-  let predicate = function
+  let predicate n =
+    match n with
     | Empty p -> p
-    | _ -> raise (Invalid_argument "no predicate")
+    | _ -> raise (Invalid_argument ("no predicate: " ^ debug_show n))
 end
 
 module Focus : sig
@@ -273,3 +281,23 @@ let parse_completions : string -> (string -> 'a Node.t option) list -> 'a Node.t
 
 type 'a node = 'a Node.t
 type focus = Focus.t
+
+module Language = struct
+
+  let hlist items =
+    let init xs =
+      match xs with
+      | [] -> None
+      | _ ->
+        let l = List.length xs in
+        Some (List.take_drop l xs)
+    in
+    match items with
+    | [] -> raise (Invalid_argument "hlist: empty list")
+    | [x] -> x
+    | _ ->
+      let f, s = init items |> Option.get_exn in
+      ((f |> List.map Notty.I.(fun i -> i <|> string Styles.normal ",")) @ s)
+      |> Notty.I.vcat
+
+end

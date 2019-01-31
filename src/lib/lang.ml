@@ -15,3 +15,4 @@ module type Def = sig
 end
 
 module Simpl : Def = Simpl_
+module Sql : Def = Sql_
