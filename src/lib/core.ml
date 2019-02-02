@@ -1,0 +1,44 @@
+
+open Common
+open Types
+
+(* TODO if completions match one thing, just commit recursively? *)
+let match_completions pred hole query completions =
+  completions
+  |> List.filter (fun (_, n) -> pred (Node.tag n)) |> List.map fst
+  |> Fuzzy.Image.rank ~around:(fun c -> [Notty.I.string Styles.highlighted (String.of_char c)]) ~pattern:query
+  |> List.map (fun f -> f.Fuzzy.Image.original, f.rendered)
+
+let parse_completions : string -> (string -> ('a, 'b) Node.t option) list -> ('a, 'b) Node.t list = fun term more ->
+  let open Option in
+  List.fold_left (fun t c ->
+      match t with
+      | None -> c term
+      | Some _ -> t
+    ) None more |> to_list
+
+module Lang = Lang.Simpl
+(* module Lang = Lang.Sql *)
+
+type node = (Lang.t, Lang.m) Node.t
+type focus = Focus.t
+
+module Language = struct
+
+  let hlist items =
+    let init xs =
+      match xs with
+      | [] -> None
+      | _ ->
+        let l = List.length xs in
+        Some (List.take_drop l xs)
+    in
+    match items with
+    | [] -> raise (Invalid_argument "hlist: empty list")
+    | [x] -> x
+    | _ ->
+      let f, s = init items |> Option.get_exn in
+      ((f |> List.map Notty.I.(fun i -> i <|> string Styles.normal ",")) @ s)
+      |> Notty.I.vcat
+
+end

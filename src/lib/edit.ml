@@ -1,8 +1,8 @@
 
 open Teash
-open Containers
-open Lens.Infix
 open Common
+open Types
+open Core
 
 type mode =
   | Insert
@@ -25,18 +25,15 @@ type field = {
 let pp_field fmt (t : field) = Format.fprintf fmt "<field>"
 let show_field x = Format.asprintf "%a" pp_field x
 
-(* module Lang = Lang.Simpl *)
-module Lang = Lang.Sql
-
 type state = {
   dimensions: int * int;
   mode: mode;
   focus: Focus.t;
-  structure: Lang.t Node.t;
+  structure: (Lang.t, Lang.m) Node.t;
   debug: string;
   field: field;
   completions: (string * Notty.image) list;
-  undo: (Lang.t Node.t * Focus.t) list;
+  undo: ((Lang.t, Lang.m) Node.t * Focus.t) list;
 }
 [@@deriving lens]
 
@@ -66,7 +63,7 @@ let init () =
     dimensions = (w, h);
     mode = Normal;
     focus = Focus.initial;
-    structure = Lang.example |> Node.uphold_invariants Lang.generate_holes;
+    structure = Lang.example |> Node.uphold_invariants;
     debug = Focus.show Focus.initial;
     field = (
       let engine = Zed_edit.create () in
@@ -108,14 +105,55 @@ let get_field_text f = Zed_edit.text f.engine |> Zed_rope.to_string
 let clear_field f =
   Zed_edit.(get_action Delete_prev_line f.ctx); f
 
-let match_completions hole term completions =
-  let p = Node.predicate hole in
-  (* get pred from hole and test each completion *)
-  completions
-  |> List.filter (fun (_, n) -> p n)
-  |> List.map fst
-  |> Fuzzy.Image.rank ~around:(fun c -> [Notty.I.string Styles.highlighted (String.of_char c)]) ~pattern:term
-  |> List.map (fun f -> f.Fuzzy.Image.original, f.rendered)
+let get_with_predicate focus node =
+  Node.cata_focus focus node (fun f children this ->
+      if f.is_focused then
+        [None, this]
+      else
+        match this with
+        | Empty -> []
+        | Static (tag, cs) ->
+          (* log "static"; *)
+          (* log @@ Lang.show tag; *)
+          (* log @@ Focus.show_view f; *)
+          (* let last = Focus.peek f.path_from_root *)
+          (* |> Option.get_lazy (fun _ -> raise (Failure "no focus")) in *)
+          (* let m, _ = List.nth cs child_n in *)
+          (match children |> List.concat with
+           | [None, c] ->
+             let m = List.find_idx Fun.id f.child_focus |> Option.map fst
+                     |> Option.map (List.nth cs)
+                     |> Option.map fst
+                     (* |> Option.get_lazy (fun _ -> raise (Failure "no child was in focus")) *)
+             in
+             [m, c]
+           (* | [] -> p[] *)
+           | [Some m, c] -> [Some m, c]
+           | _ -> []
+           (* | _ -> failwith "static dead" *)
+          )
+        (* let [_, c] =  in *)
+        | Dynamic (tag, m, _) ->
+          (* log "dynamic"; *)
+          (* log @@ Lang.show tag; *)
+          (* log @@ Focus.show_view f; *)
+          (match children |> List.concat with
+           | [Some m, c] -> [Some m, c]
+           | [None, c] -> [Some m, c]
+           | _ -> []
+           (* | _ -> failwith "dynamic dead" *)
+          )
+          (* let [_, c] = children |> List.concat in *)
+          (* [Some m, c] *)
+    )
+  |> fun n ->
+  match n with
+  | [m, c] -> m, c
+  | _ ->
+    (* None, c *)
+    raise (Invalid_argument ("get_ast: focus invalid " ^
+                             Focus.show focus ^ " " ^
+                             string_of_int (List.length n)))
 
 let update state = function
   | Deeper ->
@@ -173,7 +211,7 @@ let update state = function
     in
     (match compl with
      | [ast] ->
-       let ast1 = Node.modify state.focus state.structure ast |> Node.uphold_invariants Lang.generate_holes in
+       let ast1 = Node.modify state.focus state.structure ast |> Node.uphold_invariants in
        let old_ast = state.structure in
        let old_focus = state.focus in
        let s = state
@@ -197,10 +235,19 @@ let update state = function
     s, Cmd.none
   | UpdateCompletions ->
     let text = get_field_text state.field in
-    let hole = Node.get state.focus state.structure in
+    (* let hole = Node.get state.focus state.structure in *)
+    let meta, hole = get_with_predicate state.focus state.structure in
+    (* let pred =
+       match hole with
+       | Empty ->  *)
+    let pred = meta |> Option.map Lang.get_predicate
+               |> Option.get_or ~default:(fun _ -> true)
+               (* |> Option.get_lazy (fun _ -> raise (Failure "no predicate")) *)
+    in
     let compl =
-      if String.is_empty text then []
-      else match_completions hole text Lang.completions
+      (* if String.is_empty text then [] *)
+      (* else *)
+      match_completions pred hole text Lang.completions
     in
     (state_completions ^= compl) state, Cmd.none
   | Resize (w, h) -> (state_dimensions ^= (w, h)) state, Cmd.none

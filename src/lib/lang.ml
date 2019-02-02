@@ -1,17 +1,18 @@
 
-open Containers
 open Common
+open Types
 
 module type Def = sig
   type t
   [@@deriving show, eq]
 
-  (* val draw : bool -> string -> Notty.image *)
-  val completions : (string * t node) list
-  val guessed_completions : (string -> t node option) list
-  val generate_holes : t -> t node
-  val render : focus -> t node -> Notty.image
-  val example : t node
+  type m
+
+  val completions : (string * (t, m) Node.t) list
+  val guessed_completions : (string -> (t, m) Node.t option) list
+  val render : Focus.t -> (t, m) Node.t -> Notty.image
+  val get_predicate : m -> (t -> bool)
+  val example : (t, m) Node.t
 end
 
 module Simpl : Def = Simpl_

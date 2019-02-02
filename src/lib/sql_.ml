@@ -1,7 +1,7 @@
 
-open Containers
 open Common
 open Common.Language
+open Types
 
 type t =
   | Select
@@ -17,15 +17,54 @@ type t =
   | Op of string
 [@@deriving show, eq]
 
+type m = {
+  pred: t -> bool;
+}
+[@@deriving show]
+
+let is_var t =
+  match t with
+  | Var _ -> true
+  | _ -> false
+
+let is_table t =
+  match t with
+  | Table -> true
+  | _ -> false
+
+let is_where t =
+  match t with
+  | Where -> true
+  | _ -> false
+
+let is_expression t =
+  match t with
+  | Int _ | Bool _ | Float _ | Var _ | String _ | Op _ -> true
+  | _ -> false
+
+let get_predicate m = m.pred
+
 let select next =
   Node.(Static (Select, [
-      Dynamic (Cols, []);
-      Dynamic (Tables, []);
-      next
+      { pred = fun _ -> true }, Dynamic (Cols, { pred = is_expression }, []);
+      { pred = fun _ -> true }, Dynamic (Tables, { pred = is_table }, []);
+      { pred = is_where }, next
     ]))
 
-let table name alias = Node.(Static (Table, [name; alias]))
-let project left right = Node.(Static (Op ".", [left; right]))
+let table = Node.(Static (Table, [
+    { pred = is_var }, Empty;
+    { pred = is_var }, Empty;
+  ]))
+
+let op name = name, Node.(Static (Op name, [
+    { pred = is_expression }, Empty;
+    { pred = is_expression }, Empty;
+  ]))
+
+let project = ".", Node.(Static (Op ".", [
+    { pred = is_expression }, Empty;
+    { pred = is_var }, Empty;
+  ]))
 
 let draw focus text =
   let open Notty.I in
@@ -44,37 +83,10 @@ let draw focus text =
   in
   string s text
 
-let is_var n =
-  match Node.tag n with
-  | Var _ -> true
-  | _ -> false
-
-let is_table n =
-  match Node.tag n with
-  | Table -> true
-  | _ -> false
-
-let is_where n =
-  match Node.tag n with
-  | Where -> true
-  | _ -> false
-
-let is_expression n =
-  match Node.tag n with
-  | Int _ | Bool _ | Float _ | Var _ | String _ | Op _ -> true
-  | _ -> false
-
-let generate_holes t =
-  let open Node in
-  match t with
-  | Cols -> empty ~pred:is_expression ()
-  | Tables -> empty ~pred:is_table ()
-  | _ -> empty ()
-
 let completions = Node.[
-    "select", select (empty ~pred:is_where ());
-    "table", table (empty ~pred:is_var ()) (empty ~pred:is_var ());
-    ".", project (empty ~pred:is_expression ()) (empty ~pred:is_var ());
+    "select", select Empty;
+    "table", table;
+    project;
   ]
 
 let guessed_completions = [
@@ -104,9 +116,9 @@ let render focus node =
   let open Notty.I in
   let f Focus.{ is_parent_focused } fs node =
     match node with
-    | Node.Empty _ -> draw is_parent_focused "..."
+    | Node.Empty -> draw is_parent_focused "..."
     | Static (tag, _)
-    | Dynamic (tag, _) ->
+    | Dynamic (tag, _, _) ->
       match tag, fs with
       | Select, [cols; tables; next] ->
         (draw is_parent_focused "select") <->
@@ -138,8 +150,8 @@ let render focus node =
         hcat (match name with
             | "." -> List.intersperse (draw is_parent_focused " ") res
             | _ -> res)
-      | _ -> failwith ("invalid combination of args: " ^ Node.show pp node ^ " and " ^ string_of_int (List.length fs))
+      | _ -> failwith ("invalid combination of args: " ^ Node.show pp pp_m node ^ " and " ^ string_of_int (List.length fs))
   in
   Node.cata_focus focus node f
 
-let example = Node.(select (empty ~pred:is_where ()))
+let example = Node.(select Empty)

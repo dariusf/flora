@@ -1,9 +1,8 @@
 
-open Containers
 open Common
+open Types
 
 type t =
-  | And
   | If
   | Call of string
   | Block
@@ -15,8 +14,12 @@ type t =
   | Op of string
 [@@deriving show, eq]
 
+type m = {
+  pred: t -> bool;
+}
+[@@deriving show]
+
 let draw focus text =
-  (* Printf.printf "%s %s f:%s\n" text (string_of_bool (text = "true")) (string_of_bool focus); *)
   let open Notty.I in
   let s =
     if focus then
@@ -35,42 +38,33 @@ let draw focus text =
   in
   string s text
 
-let is_expression n =
-  match Node.tag n with
-  | Call _ | Int _ | Bool _ | Float _ | Var _ | String _ | Op _ | And -> true
+let is_expression t =
+  match t with
+  | Call _ | Int _ | Bool _ | Float _ | Var _ | String _ | Op _ -> true
   | If | Block -> false
 
-let is_statement n = not (is_expression n)
+let is_statement n =
+  match n with
+  | If | Block | Call _ -> true
+  | Int _ | Bool _ | Float _ | Var _ | String _ | Op _ -> false
 
-let generate_holes t =
-  let open Node in
-  match t with
-  | Block -> empty ~pred:is_statement ()
-  | Call _ -> empty ~pred:is_expression ()
-  | _ -> empty ()
+let get_predicate m = m.pred
+
+let op n = 
+  n, Node.Static (Op n, [
+      { pred = is_expression; }, Empty;
+      { pred = is_expression; }, Empty;
+    ])
 
 let completions = Node.[
     "if", Static (If, [
-        empty ~pred:is_expression ();
-        empty ~pred:is_statement ();
-        empty ~pred:is_statement ()
+        { pred = is_expression; }, Empty;
+        { pred = is_statement; }, Empty;
+        { pred = is_statement; }, Empty;
       ]);
-    "and", Static (And, [
-        empty ~pred:is_expression ();
-        empty ~pred:is_expression ()
-      ]);
-    "&&", Static (Op "&&", [
-        empty ~pred:is_expression ();
-        empty ~pred:is_expression ()
-      ]);
-    "=", Static (Op "=", [
-        empty ~pred:is_expression ();
-        empty ~pred:is_expression ()
-      ]);
-    "+", Static (Op "+", [
-        empty ~pred:is_expression ();
-        empty ~pred:is_expression ()
-      ]);
+    op "&&";
+    op "=";
+    op "+";
   ]
 
 let guessed_completions = [
@@ -100,14 +94,10 @@ let render focus node =
   let open Notty.I in
   let f Focus.{ is_parent_focused } fs node =
     match node with
-    | Node.Empty _ -> draw is_parent_focused "..."
+    | Node.Empty -> draw is_parent_focused "..."
     | Static (tag, _)
-    | Dynamic (tag, _) ->
+    | Dynamic (tag, _, _) ->
       match tag, fs with
-      | And, [left; right] ->
-        left <|> 
-        (draw is_parent_focused " && ") <|>
-        right
       | If, [cond; conseq; alt] ->
         (draw is_parent_focused "if" <|>
          (draw is_parent_focused " (" <|>
@@ -145,21 +135,12 @@ let render focus node =
             right])
       | Block, args ->
         List.map (fun s -> s <|> draw is_parent_focused ";") args |> vcat
-      | _ -> failwith ("invalid combination of args: " ^ Node.show pp node ^ " and " ^ string_of_int (List.length fs))
+      | _ -> failwith ("invalid combination of args: " ^ Node.show pp pp_m node ^ " and " ^ string_of_int (List.length fs))
   in
   Node.cata_focus focus node f
 
-let example = Node.(Static (If, [
-    Static (And,
-            [Static (Bool true, []); Static (Bool false, [])]);
-    Dynamic (Block, [
-        Dynamic (Call "print", [Static (Bool true, []); Static (Bool false, [])]);
-        empty ();]);
-    empty ();
-  ]))
-
-let example = Node.(Static (If, [empty ~pred:is_expression ();
-                                 Dynamic (Block, [
-                                     Dynamic (Call "print", [Static (Bool true, []); Static (Bool false, [])]);
+let example = Node.(Static (If, [{ pred = is_expression }, Empty;
+                                 { pred = is_statement }, Dynamic (Block, { pred = is_statement }, [
+                                     Dynamic (Call "print", { pred = is_expression }, [Static (Bool true, []); Static (Bool false, [])]);
                                    ]);
-                                 empty ~pred:is_statement ()]))
+                                 { pred = is_statement }, Empty ]))
