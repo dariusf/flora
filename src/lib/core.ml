@@ -23,7 +23,7 @@ module Lang = Lang.Simpl
 type node = (Lang.t, Lang.m) Node.t
 type focus = Focus.t
 
-module Language = struct
+let debug_node n = log @@ Node.show Lang.pp Lang.pp_m n
 
   let hlist items =
     let init xs =

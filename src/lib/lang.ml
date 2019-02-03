@@ -7,6 +7,7 @@ module type Def = sig
   [@@deriving show, eq]
 
   type m
+  [@@deriving show]
 
   val completions : (string * (t, m) Node.t) list
   val guessed_completions : (string -> (t, m) Node.t option) list
