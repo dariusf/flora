@@ -16,6 +16,13 @@ let is_lowercase c = Char_.('a' <= c && c <= 'z')
 let is_letter c =
   is_uppercase c || is_lowercase c
 
+let init xs =
+  match xs with
+  | [] -> None
+  | _ ->
+    let l = List.length xs - 1 in
+    Some (List.take_drop l xs)
+
 module Styles = struct
   open Notty.A
   let keyword = fg red
@@ -32,13 +39,6 @@ end
 module Language = struct
 
   let hlist items =
-    let init xs =
-      match xs with
-      | [] -> None
-      | _ ->
-        let l = List.length xs in
-        Some (List.take_drop l xs)
-    in
     match items with
     | [] -> raise (Invalid_argument "hlist: empty list")
     | [x] -> x

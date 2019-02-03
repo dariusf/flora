@@ -24,21 +24,3 @@ type node = (Lang.t, Lang.m) Node.t
 type focus = Focus.t
 
 let debug_node n = log @@ Node.show Lang.pp Lang.pp_m n
-
-  let hlist items =
-    let init xs =
-      match xs with
-      | [] -> None
-      | _ ->
-        let l = List.length xs in
-        Some (List.take_drop l xs)
-    in
-    match items with
-    | [] -> raise (Invalid_argument "hlist: empty list")
-    | [x] -> x
-    | _ ->
-      let f, s = init items |> Option.get_exn in
-      ((f |> List.map Notty.I.(fun i -> i <|> string Styles.normal ",")) @ s)
-      |> Notty.I.vcat
-
-end
