@@ -87,6 +87,7 @@ let completions = Node.[
     "select", select Empty;
     "table", table;
     project;
+    op "+";
   ]
 
 let guessed_completions = [
@@ -148,8 +149,8 @@ let render focus node =
       | Op name, [left; right] ->
         let res = [left; draw is_parent_focused name; right] in
         hcat (match name with
-            | "." -> List.intersperse (draw is_parent_focused " ") res
-            | _ -> res)
+            | "." -> res
+            | _ -> List.intersperse (draw is_parent_focused " ") res)
       | _ -> failwith ("invalid combination of args: " ^ Node.show pp pp_m node ^ " and " ^ string_of_int (List.length fs))
   in
   Node.cata_focus focus node f
