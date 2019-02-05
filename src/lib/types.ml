@@ -48,7 +48,6 @@ module Focus : sig
   val next : t -> t
   val prev : t -> t
   val add : int -> t -> t
-  val peek : t -> int option
   val validate : t -> ('a, 'b) Node_.t -> bool
 end = struct
   module D = CCFQueue
@@ -111,7 +110,6 @@ end = struct
 
   let deeper (F d) = F (D.snoc d 0)
   let add i (F d) = F (D.snoc d i)
-  let peek (F d) = D.last d
 
   let shallower (F d) =
     if D.is_empty d then F d
@@ -228,13 +226,12 @@ module Node = struct
     cata_focus focus node go
 
   let modify focus node insertion =
-    let f foc n =
-      if foc.Focus.is_focused then
-        insertion
-      else
-        n
-    in
-    map_focus focus node f
+    map_focus focus node (fun foc n ->
+        if foc.Focus.is_focused then
+          insertion
+        else
+          n
+      ) 
 
   let get focus node =
     cata_focus focus node (fun f children this ->
@@ -245,7 +242,7 @@ module Node = struct
       )
     |> function
     | [ns] -> ns
-    | _ -> raise (Invalid_argument "get_ast: focus invalid")
+    | _ -> raise (Invalid_argument "Node.get: focus invalid")
 
   let uphold_invariants node =
     (* the initial focus given here doesn't matter as it's not used in f *)

@@ -23,4 +23,41 @@ module Lang = Lang.Simpl
 type node = (Lang.t, Lang.m) Node.t
 type focus = Focus.t
 
-let debug_node n = log @@ Node.show Lang.pp Lang.pp_m n
+let debug_node n = Node.show Lang.pp Lang.pp_m n
+
+(** crashes if given an invalid focus *)
+let get_with_predicate focus node =
+  Node.cata_focus focus node (fun f children this ->
+      if f.is_focused then
+        (* this is the node. the None will be filled in when
+           traversing back up to the parent *)
+        [None, this]
+      else
+        (* from here, either a child is focused (in which case we propagate),
+           or nothing is (in which case we fail) *)
+        match this with
+        | Empty -> []
+        | Static (tag, cs) ->
+          (match children |> List.concat with
+           | [None, c] ->
+             (* figure out which child was in focus so we can get the right metadata *)
+             let m = List.find_idx Fun.id f.child_focus |> Option.map fst
+                     |> Option.map (List.nth cs)
+                     |> Option.map fst
+             in [m, c]
+           | [meta, c] -> [meta, c]
+           | _ -> []
+          )
+        | Dynamic (tag, m, _) ->
+          (match children |> List.concat with
+           | [None, c] -> [Some m, c] (* immediate child *)
+           | [meta, c] -> [meta, c] (* descendent *)
+           | _ -> [])
+    )
+  |> fun n ->
+  match n with
+  | [m, c] -> m, c
+  | _ ->
+    raise (Invalid_argument ("get_with_predicate: focus invalid " ^
+                             Focus.show focus ^ " " ^
+                             debug_node node))

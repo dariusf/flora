@@ -116,56 +116,6 @@ let get_field_text f = Zed_edit.text f.engine |> Zed_rope.to_string
 let clear_field f =
   Zed_edit.(get_action Delete_prev_line f.ctx); f
 
-let get_with_predicate focus node =
-  Node.cata_focus focus node (fun f children this ->
-      if f.is_focused then
-        [None, this]
-      else
-        match this with
-        | Empty -> []
-        | Static (tag, cs) ->
-          (* log "static"; *)
-          (* log @@ Lang.show tag; *)
-          (* log @@ Focus.show_view f; *)
-          (* let last = Focus.peek f.path_from_root *)
-          (* |> Option.get_lazy (fun _ -> raise (Failure "no focus")) in *)
-          (* let m, _ = List.nth cs child_n in *)
-          (match children |> List.concat with
-           | [None, c] ->
-             let m = List.find_idx Fun.id f.child_focus |> Option.map fst
-                     |> Option.map (List.nth cs)
-                     |> Option.map fst
-                     (* |> Option.get_lazy (fun _ -> raise (Failure "no child was in focus")) *)
-             in
-             [m, c]
-           (* | [] -> p[] *)
-           | [Some m, c] -> [Some m, c]
-           | _ -> []
-           (* | _ -> failwith "static dead" *)
-          )
-        (* let [_, c] =  in *)
-        | Dynamic (tag, m, _) ->
-          (* log "dynamic"; *)
-          (* log @@ Lang.show tag; *)
-          (* log @@ Focus.show_view f; *)
-          (match children |> List.concat with
-           | [Some m, c] -> [Some m, c]
-           | [None, c] -> [Some m, c]
-           | _ -> []
-           (* | _ -> failwith "dynamic dead" *)
-          )
-          (* let [_, c] = children |> List.concat in *)
-          (* [Some m, c] *)
-    )
-  |> fun n ->
-  match n with
-  | [m, c] -> m, c
-  | _ ->
-    (* None, c *)
-    raise (Invalid_argument ("get_ast: focus invalid " ^
-                             Focus.show focus ^ " " ^
-                             string_of_int (List.length n)))
-
 let update state = function
   | Deeper ->
     let f1 = Focus.deeper state.focus in
