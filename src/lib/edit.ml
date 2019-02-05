@@ -26,7 +26,8 @@ let pp_field fmt (t : field) = Format.fprintf fmt "<field>"
 let show_field x = Format.asprintf "%a" pp_field x
 
 type state = {
-  dimensions: int * int;
+  screen_dimensions: int * int;
+  scroll: int * int;
   mode: mode;
   focus: Focus.t;
   structure: (Lang.t, Lang.m) Node.t;
@@ -36,6 +37,10 @@ type state = {
   undo: ((Lang.t, Lang.m) Node.t * Focus.t) list;
 }
 [@@deriving lens]
+
+(* this goes outside the flow of TEA because it's too cumbersome to send
+   a Render message each time anything changes. *)
+let editor_dimensions = ref (max_int, max_int)
 
 type msg =
   | Deeper
@@ -50,6 +55,7 @@ type msg =
   | Undo
   | CommitCompletion
   | Resize of int * int
+  | Scroll of int * int
   | Key of Notty.Unescape.key 
 
 let init () =
@@ -60,7 +66,8 @@ let init () =
     | Some (w, h) -> w, h
   in
   {
-    dimensions = (w, h);
+    screen_dimensions = (w, h);
+    scroll = (0, 0);
     mode = Normal;
     focus = Focus.initial;
     structure = Lang.example |> Node.uphold_invariants;
@@ -74,14 +81,18 @@ let init () =
     undo = [];
   }, Cmd.msg UpdateCompletions
 
-let key_to_cmd = function
-  | `Arrow `Up, _mods
+let key_to_cmd (_, h) key =
+  match key with
+  | `Arrow `Up, _mods -> Cmd.msg (Scroll (0, -1))
+  | `Arrow `Down, _mods -> Cmd.msg (Scroll (0, 1))
+  | `Arrow `Left, _mods -> Cmd.msg (Scroll (-1, 0))
+  | `Arrow `Right, _mods -> Cmd.msg (Scroll (1, 0))
+  (* not sure why ctrl + letter is uppercased *)
+  | `ASCII 'F', [`Ctrl] -> Cmd.msg (Scroll (0, h - 1))
+  | `ASCII 'B', [`Ctrl] -> Cmd.msg (Scroll (0, - (h - 1)))
   | `ASCII 'k', _mods -> Cmd.msg Shallower
-  | `Arrow `Down, _mods
   | `ASCII 'j', _mods -> Cmd.msg Deeper
-  | `Arrow `Left, _mods
   | `ASCII 'h', _mods -> Cmd.msg Prev
-  | `Arrow `Right, _mods
   | `ASCII 'l', _mods -> Cmd.msg Next
   | `ASCII 'u', _mods -> Cmd.msg Undo
   | `ASCII 'N', _mods -> Cmd.msg PrevHole
@@ -250,7 +261,18 @@ let update state = function
       match_completions pred hole text Lang.completions
     in
     (state_completions ^= compl) state, Cmd.none
-  | Resize (w, h) -> (state_dimensions ^= (w, h)) state, Cmd.none
+  | Resize (w, h) -> (state_screen_dimensions ^= (w, h)) state, Cmd.none
+  | Scroll (dw, dh) ->
+    (state_scroll ^%= fun (w, h) -> (
+          let (we, he) = !editor_dimensions in
+          let w1 = w + dw in
+          let h1 = h + dh in
+          clamp ~high:(we - 1) ~low:0 w1,
+          clamp ~high:(he - 1) ~low:(state.screen_dimensions
+                                     (* 2: 1 for status bar, 1 for buffer. *)
+                                     (* TODO might need to make this more general *)
+                                     |> fun (_, h) -> -h + 2) h1
+        )) state, Cmd.none
   | Key key -> (
       match state.mode with
       | Insert -> (
@@ -269,7 +291,7 @@ let update state = function
             Option.iter (fun a -> Zed_edit.get_action a state.field.ctx) act;
             state, Cmd.msg UpdateCompletions
         );
-      | Normal -> state, (key_to_cmd key)
+      | Normal -> state, (key_to_cmd state.screen_dimensions key)
     )
 
 let render_field state =
@@ -293,15 +315,16 @@ let term_resize () =
     )
 
 let crop_to w h image =
-  (* the semantics of overlaying make the composite width the max of the arguments, but we want it to  be the min *)
+  (* the semantics of overlaying make the composite width the max of the arguments',
+      but we want it to be the min. note that this pads too. *)
   let open Notty.I in
   let iw, ih = width image, height image in
   crop ~l:0 ~r:(iw - w) ~t:0 ~b:(ih - h) image
 
 let view state =
   Notty.I.(
-    let w, h = state.dimensions in
-    let main = void w (h - 1) in
+    let w, h = state.screen_dimensions in
+    let viewport = void w (h - 1) in
     let status = void w 1 in
     let editor = [
       Lang.render state.focus state.structure;
@@ -312,8 +335,13 @@ let view state =
        match compl with
        | [] when not (String.is_empty (get_field_text state.field)) -> string Styles.normal "<no matches; guess?>"
        | _ -> vcat compl);
-    ] |> vcat |> crop_to (width main) (height main) in
-    (editor </> main) <-> (string Styles.normal "lul" </> status)
+    ] |> vcat in
+    (* observe editor dimensions before cropping to the viewport *)
+    editor_dimensions := (width editor, height editor);
+    let (ws, hs) = state.scroll in
+    let editor = crop ~l:ws ~t:hs editor
+                 |> crop_to (width viewport) (height viewport) in
+    (editor </> viewport) <-> (string Styles.normal "lul" </> status)
   )
 
 let subscriptions _model =

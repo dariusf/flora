@@ -6,6 +6,12 @@ let is_int s =
   try ignore (int_of_string s); true
   with _ -> false
 
+let clamp ~high ~low n =
+  Int.(max low (min high n))
+
+let min_int = Int.(2 ** 62);;
+let max_int = Int.((2 ** 62) - 1);;
+
 module Char_ = struct
   include Char
   let (<=) a b = Char.compare a b <= 0
