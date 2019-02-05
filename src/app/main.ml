@@ -1,2 +1,2 @@
 
-let () = Edit.main ()
+let () = Edit.Main.main ()

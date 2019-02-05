@@ -25,9 +25,18 @@ module Node_ = struct
 end
 
 module Focus : sig
+  (** Says whether or not a given node is in focus, relative to where the focus actually is.
+      See implementation for possible values and examples. *)
   type t
   [@@deriving show]
 
+  (**
+     - [is_focused]: true iff a node is in focus
+     - [is_parent_focused]: true for all nodes whose parent is in focus
+     - [focus_relative]: see {!type:t}
+     - [path_from_root]: path to this node from the root; also a {!type:t} and not just a {!type:Deque.t} because we use it to move focus here
+     - [child_focus]: indicates which child, if any, is in focus; will have exactly one or no true values
+  *)
   type view = {
     is_focused: bool;
     is_parent_focused: bool;
@@ -50,14 +59,16 @@ module Focus : sig
   val add : int -> t -> t
   val validate : t -> ('a, 'b) Node_.t -> bool
 end = struct
-  module D = CCFQueue
-  (**
-     tracks the path to the highest child focused.
-     an empty queue means everything below that is highlighted
-     (due to focus being inherited).
-     nope is to distinguish the empty case from that.
+  (* Possible values:
+     - Nope: yeah, no
+     - ByParent: no, but it's the child of a node in focus
+     - []: yes
+     - [a, b, ...]: no, but the child reached by following the given path is in focus
   *)
-  type t = Nope | ByParent | F of int D.t
+  type t =
+    | Nope
+    | ByParent
+    | F of int Deque.t
   [@@deriving show]
 
   type view = {
@@ -70,32 +81,33 @@ end = struct
   [@@deriving show]
 
   let initial =
-    F D.empty
+    F Deque.empty
 
-  (* these operate on intermediate focus structures
+  (* These operate on intermediate focus values
      and thus are allowed to contain Nope *)
 
   let is_focused d =
     match d with
     | Nope -> false
     | ByParent -> false
-    | F d -> D.is_empty d
+    | F d -> Deque.is_empty d
 
   let is_parent_focused d =
     match d with
     | Nope -> false
     | ByParent -> true
-    | F d -> D.is_empty d
+    | F d -> Deque.is_empty d
 
+  (* The only place relative focus values are generated *)
   let view_deeper fd n =
     match fd with
     | Nope
     | ByParent -> fd
     | F d ->
-      if D.is_empty d then
+      if Deque.is_empty d then
         ByParent
       else
-        let e, d1 = D.take_front_exn d in
+        let e, d1 = Deque.take_front_exn d in
         if e = n then F d1 else Nope
 
   let show d =
@@ -106,20 +118,20 @@ end = struct
       let f = d |> CCFQueue.to_list in
       f |> List.map string_of_int |> String.concat ";" |> fun a -> "[" ^ a ^ "]"
 
-  (* these operate on the entire state and thus will never see a Nope *)
+  (* These operate on the entire state and thus will only see F *)
 
-  let deeper (F d) = F (D.snoc d 0)
-  let add i (F d) = F (D.snoc d i)
+  let deeper (F d) = F (Deque.snoc d 0)
+  let add i (F d) = F (Deque.snoc d i)
 
   let shallower (F d) =
-    if D.is_empty d then F d
-    else let d1, _ = D.take_back_exn d in F d1
+    if Deque.is_empty d then F d
+    else let d1, _ = Deque.take_back_exn d in F d1
 
   let on_last (F d) f =
-    if D.is_empty d then F d
+    if Deque.is_empty d then F d
     else
-      let d1, e = D.take_back_exn d in
-      F (D.snoc d1 (f e))
+      let d1, e = Deque.take_back_exn d in
+      F (Deque.snoc d1 (f e))
 
   let next d =
     on_last d (fun e -> e + 1)
@@ -129,9 +141,9 @@ end = struct
 
   let rec validate (F d) node =
     match node with
-    | Node_.Empty -> D.is_empty d
+    | Node_.Empty -> Deque.is_empty d
     | Static (_, children) ->
-      (match D.take_front d with
+      (match Deque.take_front d with
        | Some (e, d1) ->
          List.nth_opt children e
          |> Option.map snd (* drop metadata *)
@@ -140,14 +152,13 @@ end = struct
        | None -> true
       )
     | Dynamic (_, _, children) ->
-      (match D.take_front d with
+      (match Deque.take_front d with
        | Some (e, d1) ->
          List.nth_opt children e
          |> Option.map (validate (F d1))
          |> Option.get_or ~default:false
        | None -> true
       )
-
 end
 
 module Node = struct
@@ -181,7 +192,6 @@ module Node = struct
           ) items in
         let child_focus, aggregated = List.split child_results in
         f { foc with child_focus } aggregated node
-        (* f foc child_results node *)
     in run focus Focus.initial node
 
   let next_postorder focus node pred =

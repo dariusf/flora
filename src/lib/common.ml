@@ -2,6 +2,8 @@
 include Containers
 include Lens.Infix
 
+module Deque = CCFQueue
+
 let is_int s =
   try ignore (int_of_string s); true
   with _ -> false
