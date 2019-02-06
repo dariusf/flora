@@ -17,8 +17,8 @@ let parse_completions : string -> (string -> ('a, 'b) Node.t option) list -> ('a
       | Some _ -> t
     ) None more |> to_list
 
-module Lang = Lang.Simpl
-(* module Lang = Lang.Sql *)
+(* module Lang = Lang.Simpl *)
+module Lang = Lang.Sql
 
 type node = (Lang.t, Lang.m) Node.t
 type focus = Focus.t

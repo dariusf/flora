@@ -67,6 +67,8 @@ let completions = Node.[
     op "+";
   ]
 
+let dynamic_completions _ = []
+
 let guessed_completions = [
   Option.wrap (fun i -> Int (int_of_string i));
   Option.wrap (fun f -> Float (float_of_string f));

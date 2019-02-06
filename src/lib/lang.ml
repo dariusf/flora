@@ -10,6 +10,7 @@ module type Def = sig
   [@@deriving show]
 
   val completions : (string * (t, m) Node.t) list
+  val dynamic_completions : (t, m) Node.t -> (string * (t, m) Node.t) list
   val guessed_completions : (string -> (t, m) Node.t option) list
   val render : Focus.t -> (t, m) Node.t -> Notty.image
 

@@ -90,6 +90,16 @@ let completions = Node.[
     op "+";
   ]
 
+let collect node =
+  Node.(cata_focus Focus.initial node (fun _ children this ->
+      match this with
+      | Static (Table, [_; _, Static (Var v, _)]) -> [v]
+      | _ -> List.concat children
+    ))
+
+let dynamic_completions node =
+  collect node |> List.map (fun v -> v, Node.Static (Var v, []))
+
 let guessed_completions = [
   Option.wrap (fun i -> Int (int_of_string i));
   Option.wrap (fun f -> Float (float_of_string f));

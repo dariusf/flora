@@ -205,10 +205,11 @@ let update state = function
                |> Option.get_or ~default:(fun _ -> true)
                (* |> Option.get_lazy (fun _ -> raise (Failure "no predicate")) *)
     in
+    let candidates = Lang.completions @ Lang.dynamic_completions state.structure in
     let compl =
       (* if String.is_empty text then [] *)
       (* else *)
-      match_completions pred hole text Lang.completions
+      match_completions pred hole text candidates
     in
     (state_completions ^= compl) state, Cmd.none
   | Resize (w, h) -> (state_screen_dimensions ^= (w, h)) state, Cmd.none
