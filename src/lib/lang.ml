@@ -19,5 +19,15 @@ module type Def = sig
   val example : (t, m) Node.t
 end
 
-module Simpl : Def = Simpl_
-module Sql : Def = Sql_
+module type Definition = sig
+  include Def
+  val all_completions : (t, m) Node.t -> (string * (t, m) Node.t) list
+end
+
+module BaseDefinition (F : Def) : Definition = struct
+  include F
+  let all_completions node = completions @ dynamic_completions node
+end
+
+module Simpl : Definition = BaseDefinition (Simpl_)
+module Sql : Definition = BaseDefinition (Sql_)

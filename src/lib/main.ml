@@ -165,9 +165,12 @@ let update state = function
   | CommitCompletion ->
     let text = get_field_text state.field in
     let compl, literal =
+      (* try to get a candidate, either by guessing or looking up the string picked *)
       match state.completions with
       | [] -> parse_completions text Lang.guessed_completions, true
-      | [c, image] -> List.assoc_opt ~eq:String.equal c Lang.completions |> Option.to_list, false
+      | [c, _] ->
+        let candidates = Lang.all_completions state.structure in
+        List.assoc_opt ~eq:String.equal c candidates |> Option.to_list, false
       | _ -> [], false
     in
     (match compl with
@@ -202,7 +205,7 @@ let update state = function
                   is focused and there are no predicates to associate with it *)
                |> Option.get_or ~default:(fun _ -> true)
     in
-    let candidates = Lang.completions @ Lang.dynamic_completions state.structure in
+    let candidates = Lang.all_completions state.structure in
     let compl = match_completions pred hole text candidates in
     (state_completions ^= compl) state, Cmd.none
   | Resize (w, h) -> (state_screen_dimensions ^= (w, h)) state, Cmd.none
