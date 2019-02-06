@@ -31,3 +31,17 @@ end
 
 module Simpl : Definition = BaseDefinition (Simpl_)
 module Sql : Definition = BaseDefinition (Sql_)
+
+(** {1:compl The Completion Pipeline}
+
+    First possible completions for the hole in focus are generated:
+    - {{!type:Def.completions}static}
+    - {{!type:Def.dynamic_completions}AST-based}
+    - {{!type:Def.guessed_completions}input-based}
+
+    These are then filtered based on:
+    - the committed input
+    - predicates on the hole
+    - semantic checks
+
+*)
