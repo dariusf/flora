@@ -81,24 +81,24 @@ let init () =
     undo = [];
   }, Cmd.msg UpdateCompletions
 
-let key_to_cmd (_, h) key =
+let key_to_cmd is_hole screen_height key =
   match key with
-  | `Arrow `Up, _mods -> Cmd.msg (Scroll (0, -1))
-  | `Arrow `Down, _mods -> Cmd.msg (Scroll (0, 1))
-  | `Arrow `Left, _mods -> Cmd.msg (Scroll (-1, 0))
-  | `Arrow `Right, _mods -> Cmd.msg (Scroll (1, 0))
+  | `Arrow `Up, _ -> Cmd.msg (Scroll (0, -1))
+  | `Arrow `Down, _ -> Cmd.msg (Scroll (0, 1))
+  | `Arrow `Left, _ -> Cmd.msg (Scroll (-1, 0))
+  | `Arrow `Right, _ -> Cmd.msg (Scroll (1, 0))
   (* not sure why ctrl + letter is uppercased *)
-  | `ASCII 'F', [`Ctrl] -> Cmd.msg (Scroll (0, h - 1))
-  | `ASCII 'B', [`Ctrl] -> Cmd.msg (Scroll (0, - (h - 1)))
-  | `ASCII 'k', _mods -> Cmd.msg Shallower
-  | `ASCII 'j', _mods -> Cmd.msg Deeper
-  | `ASCII 'h', _mods -> Cmd.msg Prev
-  | `ASCII 'l', _mods -> Cmd.msg Next
-  | `ASCII 'u', _mods -> Cmd.msg Undo
-  | `ASCII 'N', _mods -> Cmd.msg PrevHole
-  | `ASCII 'n', _mods -> Cmd.msg NextHole
-  | `ASCII 'i', _mods -> Cmd.msg InsertMode
-  | `ASCII 'q', _mods -> App.exit
+  | `ASCII 'F', [`Ctrl] -> Cmd.msg (Scroll (0, screen_height - 1))
+  | `ASCII 'B', [`Ctrl] -> Cmd.msg (Scroll (0, - (screen_height - 1)))
+  | `ASCII 'k', _ -> Cmd.msg Shallower
+  | `ASCII 'j', _ -> Cmd.msg Deeper
+  | `ASCII 'h', _ -> Cmd.msg Prev
+  | `ASCII 'l', _ -> Cmd.msg Next
+  | `ASCII 'u', _ -> Cmd.msg Undo
+  | `ASCII 'N', _ -> Cmd.msg PrevHole
+  | `ASCII 'n', _ -> Cmd.msg NextHole
+  | `ASCII 'i', _ when is_hole -> Cmd.msg InsertMode
+  | `ASCII 'q', _ -> App.exit
   | _ -> Cmd.none
 
 let update_debug state =
@@ -241,7 +241,10 @@ let update state = function
             Option.iter (fun a -> Zed_edit.get_action a state.field.ctx) act;
             state, Cmd.msg UpdateCompletions
         );
-      | Normal -> state, (key_to_cmd state.screen_dimensions key)
+      | Normal ->
+        let is_hole = Node.(get state.focus state.structure |> is_empty) in
+        let _, screen_height = state.screen_dimensions in
+        state, (key_to_cmd is_hole screen_height key)
     )
 
 let render_field state =
