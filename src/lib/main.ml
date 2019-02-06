@@ -38,6 +38,9 @@ type state = {
 }
 [@@deriving lens]
 
+let post_update s =
+  s |> (state_structure ^%= Node.uphold_invariants)
+
 (* this goes outside the flow of TEA because it's too cumbersome to send
    a Render message each time anything changes. *)
 let editor_dimensions = ref (max_int, max_int)
@@ -70,7 +73,7 @@ let init () =
     scroll = (0, 0);
     mode = Normal;
     focus = Focus.initial;
-    structure = Lang.example |> Node.uphold_invariants;
+    structure = Lang.example;
     debug = Focus.show Focus.initial;
     field = (
       let engine = Zed_edit.create () in
@@ -79,7 +82,7 @@ let init () =
       { engine; cursor; ctx });
     completions = [];
     undo = [];
-  }, Cmd.msg UpdateCompletions
+  } |> post_update, Cmd.msg UpdateCompletions
 
 let key_to_cmd is_hole screen_height key =
   match key with
@@ -175,7 +178,7 @@ let update state = function
     in
     (match compl with
      | [ast] ->
-       let ast1 = Node.modify state.focus state.structure ast |> Node.uphold_invariants in
+       let ast1 = Node.modify state.focus state.structure ast in
        let old_ast = state.structure in
        let old_focus = state.focus in
        let s = state
@@ -183,6 +186,7 @@ let update state = function
                |> (state_focus ^%= (fun f -> if not literal then Focus.deeper f else f))
                |> (state_field ^%= clear_field)
                |> (state_undo ^%= (fun s -> ((old_ast, old_focus) :: s) |> List.take 5))
+               |> post_update
        in
        (* s, Cmd.batch ([Cmd.msg UpdateCompletions] @ if literal then [Cmd.msg ToNormal] else []) *)
        s, Cmd.batch ([Cmd.msg UpdateCompletions] @ if literal then [Cmd.msg NextHole] else [])
