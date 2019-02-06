@@ -196,21 +196,14 @@ let update state = function
     s, Cmd.none
   | UpdateCompletions ->
     let text = get_field_text state.field in
-    (* let hole = Node.get state.focus state.structure in *)
     let meta, hole = get_with_predicate state.focus state.structure in
-    (* let pred =
-       match hole with
-       | Empty ->  *)
     let pred = meta |> Option.map Lang.get_predicate
+               (* this is required in some edge cases, such as if the root
+                  is focused and there are no predicates to associate with it *)
                |> Option.get_or ~default:(fun _ -> true)
-               (* |> Option.get_lazy (fun _ -> raise (Failure "no predicate")) *)
     in
     let candidates = Lang.completions @ Lang.dynamic_completions state.structure in
-    let compl =
-      (* if String.is_empty text then [] *)
-      (* else *)
-      match_completions pred hole text candidates
-    in
+    let compl = match_completions pred hole text candidates in
     (state_completions ^= compl) state, Cmd.none
   | Resize (w, h) -> (state_screen_dimensions ^= (w, h)) state, Cmd.none
   | Scroll (dw, dh) ->
