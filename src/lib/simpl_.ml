@@ -19,6 +19,9 @@ type m = {
 }
 [@@deriving show]
 
+type s = ()
+[@@deriving show]
+
 let draw focus text =
   let open Notty.I in
   let s =
@@ -68,6 +71,8 @@ let completions = Node.[
   ]
 
 let dynamic_completions _ = []
+
+let analyze _ = ()
 
 let guessed_completions = [
   Option.wrap (fun i -> Int (int_of_string i));

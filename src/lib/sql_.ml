@@ -22,6 +22,9 @@ type m = {
 }
 [@@deriving show]
 
+type s = string list
+[@@deriving show]
+
 let is_var t =
   match t with
   | Var _ -> true
@@ -90,7 +93,7 @@ let completions = Node.[
     op "+";
   ]
 
-let collect node =
+let analyze node =
   Node.(cata_focus Focus.initial node (fun _ children this ->
       match this with
       | Static (Table, [_; _, Static (Var v, _)]) -> [v]
@@ -98,7 +101,7 @@ let collect node =
     ))
 
 let dynamic_completions node =
-  collect node |> List.map (fun v -> v, Node.Static (Var v, []))
+  analyze node |> List.map (fun v -> v, Node.Static (Var v, []))
 
 let guessed_completions = [
   Option.wrap (fun i -> Int (int_of_string i));

@@ -3,16 +3,23 @@ open Common
 open Types
 
 module type Def = sig
+  (** A language's characteristic tag for AST nodes *)
   type t
   [@@deriving show, eq]
 
+  (** Metadata associated with each hole *)
   type m
+  [@@deriving show]
+
+  (** Semantic information *)
+  type s
   [@@deriving show]
 
   val completions : (string * (t, m) Node.t) list
   val dynamic_completions : (t, m) Node.t -> (string * (t, m) Node.t) list
   val guessed_completions : (string -> (t, m) Node.t option) list
   val render : Focus.t -> (t, m) Node.t -> Notty.image
+  val analyze : (t, m) Node.t -> s
 
   (* TODO maybe move metadata up to this interface *)
   val get_predicate : m -> (t -> bool)
