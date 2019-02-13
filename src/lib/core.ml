@@ -1,11 +1,14 @@
 
 open Common
 open Types
+open Lang
 
 (* TODO if completions match one thing, just commit recursively? *)
 let match_completions pred hole query completions =
   completions
-  |> List.filter (fun (_, n) -> pred (Node.tag n)) |> List.map fst
+  |> List.filter (fun { node } -> pred (Node.tag node))
+  |> List.map (fun { trigger } -> trigger)
+  (* TODO put the desc in *)
   |> Fuzzy.Image.rank ~around:(fun c -> [Notty.I.string Styles.highlighted (String.of_char c)]) ~pattern:query
   |> List.map (fun f -> f.Fuzzy.Image.original, f.rendered)
 
@@ -17,8 +20,8 @@ let parse_completions : string -> (string -> ('a, 'b) Node.t option) list -> ('a
       | Some _ -> t
     ) None more |> to_list
 
-(* module Lang = Lang.Simpl *)
-module Lang = Lang.Sql
+module Lang = Lang.Simpl
+(* module Lang = Lang.Sql *)
 
 type node = (Lang.t, Lang.m) Node.t
 type focus = Focus.t

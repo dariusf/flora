@@ -22,6 +22,8 @@ type m = {
 type s = ()
 [@@deriving show]
 
+let no_info = ()
+
 let draw focus text =
   let open Notty.I in
   let s =
@@ -54,17 +56,24 @@ let is_statement n =
 let get_predicate m = m.pred
 
 let op n = 
-  n, Node.Static (Op n, [
-      { pred = is_expression; }, Empty;
-      { pred = is_expression; }, Empty;
-    ])
+  { trigger = n;
+    desc = n;
+    node = Node.Static (Op n, [
+        { pred = is_expression; }, Empty;
+        { pred = is_expression; }, Empty;
+      ]);
+    is_literal = false }
 
 let completions = Node.[
-    "if", Static (If, [
-        { pred = is_expression; }, Empty;
-        { pred = is_statement; }, Empty;
-        { pred = is_statement; }, Empty;
-      ]);
+    { trigger = "if";
+      desc = "";
+      node = Static (If, [
+          { pred = is_expression; }, Empty;
+          { pred = is_statement; }, Empty;
+          { pred = is_statement; }, Empty;
+        ]);
+      is_literal = true;
+    };
     op "&&";
     op "=";
     op "+";
@@ -74,28 +83,35 @@ let dynamic_completions _ = []
 
 let analyze _ = ()
 
-let guessed_completions = [
-  Option.wrap (fun i -> Int (int_of_string i));
-  Option.wrap (fun f -> Float (float_of_string f));
-  Option.wrap (fun b -> Bool (bool_of_string b));
-  Option.wrap (fun s ->
+let guessed_completions _ = [{
+    trigger = "lol";
+    desc = "lol1";
+    node = Static (Int (1), []);
+    is_literal = true;
+  }]
+
+(* let guessed_completions = [
+   Option.wrap (fun i -> Int (int_of_string i));
+   Option.wrap (fun f -> Float (float_of_string f));
+   Option.wrap (fun b -> Bool (bool_of_string b));
+   Option.wrap (fun s ->
       let l = String.length s in
       if Char.(equal s.[0] '"' && equal s.[l - 1] '"') then
         String (String.sub s 1 (l - 2))
       else
         raise (Invalid_argument "not a string"));
-  Option.wrap (fun s ->
+   Option.wrap (fun s ->
       let l = String.length s in
       if Char.(equal s.[0] '"' && equal s.[l - 1] '"') then
         String (String.sub s 1 (l - 2))
       else
         raise (Invalid_argument "not a string"));
-  (fun v ->
+   (fun v ->
      if not (String.is_empty v) && String.for_all (fun l -> is_letter l || Char.equal l '_') v then
        Some (Var v)
      else 
        None);
-] |> List.map (fun c -> Fun.compose c (Option.map (fun b -> Node.Static (b, []))))
+   ] |> List.map (fun c -> Fun.compose c (Option.map (fun b -> Node.Static (b, [])))) *)
 
 let render focus node =
   let open Notty.I in

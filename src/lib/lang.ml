@@ -15,11 +15,13 @@ module type Def = sig
   type s
   [@@deriving show]
 
-  val completions : (string * (t, m) Node.t) list
-  val dynamic_completions : (t, m) Node.t -> (string * (t, m) Node.t) list
-  val guessed_completions : (string -> (t, m) Node.t option) list
+  val completions : (t, m) completion list
+  val dynamic_completions : s -> (t, m) completion list
+  (* val guessed_completions : (string -> (t, m) Node.t option) list *)
+  val guessed_completions : string -> (t, m) completion list
   val render : Focus.t -> (t, m) Node.t -> Notty.image
   val analyze : (t, m) Node.t -> s
+  val no_info : s
 
   (* TODO maybe move metadata up to this interface *)
   val get_predicate : m -> (t -> bool)
@@ -28,12 +30,16 @@ end
 
 module type Definition = sig
   include Def
-  val all_completions : (t, m) Node.t -> (string * (t, m) Node.t) list
+  val all_completions : s -> string -> (t, m) completion list
+  (* (string * (t, m) Node.t) *)
 end
 
 module BaseDefinition (F : Def) : Definition = struct
   include F
-  let all_completions node = completions @ dynamic_completions node
+  let all_completions s i =
+    completions @
+    dynamic_completions s @
+    guessed_completions i
 end
 
 module Simpl : Definition = BaseDefinition (Simpl_)

@@ -35,11 +35,15 @@ type state = {
   field: field;
   completions: (string * Notty.image) list;
   undo: ((Lang.t, Lang.m) Node.t * Focus.t) list;
+
+  (* derived state follows *)
+  semantic_info: Lang.s;
 }
 [@@deriving lens]
 
 let post_update s =
-  s |> (state_structure ^%= Node.uphold_invariants)
+  let s = (state_structure ^%= Node.uphold_invariants) s in
+  s |> (state_semantic_info ^= Lang.analyze s.structure)
 
 (* this goes outside the flow of TEA because it's too cumbersome to send
    a Render message each time anything changes. *)
@@ -82,6 +86,7 @@ let init () =
       { engine; cursor; ctx });
     completions = [];
     undo = [];
+    semantic_info = Lang.no_info;
   } |> post_update, Cmd.msg UpdateCompletions
 
 let key_to_cmd is_hole screen_height key =
@@ -165,24 +170,37 @@ let update state = function
   | InsertMode -> (state_mode ^= Insert) state, Cmd.none
   | NormalMode ->
     state |> (state_mode ^= Normal) |> (state_field ^%= clear_field), Cmd.none
+  | UpdateCompletions ->
+    let text = get_field_text state.field in
+    let meta, hole = get_with_predicate state.focus state.structure in
+    let pred = meta |> Option.map Lang.get_predicate
+               (* this is required in some edge cases, such as if the root
+                  is focused and there are no predicates to associate with it *)
+               |> Option.get_or ~default:(fun _ -> true)
+    in
+    let candidates = Lang.all_completions state.semantic_info text in
+    let compl = match_completions pred hole text candidates in
+    (state_completions ^= compl) state, Cmd.none
   | CommitCompletion ->
     let text = get_field_text state.field in
     let compl, literal =
       (* try to get a candidate, either by guessing or looking up the string picked *)
+      (* try to get a candidate by looking up the string picked *)
       match state.completions with
-      | [] -> parse_completions text Lang.guessed_completions, true
-      | [c, _] ->
-        let candidates = Lang.all_completions state.structure in
-        List.assoc_opt ~eq:String.equal c candidates |> Option.to_list, false
+      (* | [] -> parse_completions text Lang.guessed_completions, true *)
+      | (c, _) :: _ ->
+        let candidates = Lang.all_completions state.semantic_info text in
+        List.filter (fun ca -> String.equal ca.trigger c) candidates, false
+      (* ~eq:String.equal c candidates |> Option.to_list *)
       | _ -> [], false
     in
     (match compl with
-     | [ast] ->
-       let ast1 = Node.modify state.focus state.structure ast in
+     | comp :: _ ->
+       let ast = Node.modify state.focus state.structure comp.node in
        let old_ast = state.structure in
        let old_focus = state.focus in
        let s = state
-               |> (state_structure ^= ast1)
+               |> (state_structure ^= ast)
                |> (state_focus ^%= (fun f -> if not literal then Focus.deeper f else f))
                |> (state_field ^%= clear_field)
                |> (state_undo ^%= (fun s -> ((old_ast, old_focus) :: s) |> List.take 5))
@@ -201,17 +219,6 @@ let update state = function
       | (s1, f) :: rest -> state |> (state_structure ^= s1) |> (state_undo ^= rest) |> (state_focus ^= f)
     in
     s, Cmd.none
-  | UpdateCompletions ->
-    let text = get_field_text state.field in
-    let meta, hole = get_with_predicate state.focus state.structure in
-    let pred = meta |> Option.map Lang.get_predicate
-               (* this is required in some edge cases, such as if the root
-                  is focused and there are no predicates to associate with it *)
-               |> Option.get_or ~default:(fun _ -> true)
-    in
-    let candidates = Lang.all_completions state.structure in
-    let compl = match_completions pred hole text candidates in
-    (state_completions ^= compl) state, Cmd.none
   | Resize (w, h) -> (state_screen_dimensions ^= (w, h)) state, Cmd.none
   | Scroll (dw, dh) ->
     (state_scroll ^%= fun (w, h) -> (

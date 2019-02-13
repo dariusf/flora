@@ -267,3 +267,10 @@ module Node = struct
         | _ -> n
       )
 end
+
+type ('t, 'm) completion = {
+  trigger: string;
+  desc: string;
+  node: ('t, 'm) Node.t;
+  is_literal: bool;
+}
