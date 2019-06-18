@@ -14,7 +14,6 @@
   (ocaml (< 4.08))
    ppx_deriving
    containers
-   containers.data
    lambda-term
    teash
    lens)
