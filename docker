@@ -1,0 +1,4 @@
+#!/bin/bash
+
+docker build -t flora .
+docker run -it --rm --user root -w /project -v "$(pwd):/project" flora "$@"

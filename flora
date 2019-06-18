@@ -1,4 +1,5 @@
 #!/bin/bash
 set -ex
+which dune || eval $(opam env)
 dune build src/app/main.exe
 OCAMLRUNPARAM=b _build/default/src/app/main.exe $@
