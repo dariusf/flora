@@ -1,5 +1,5 @@
 (library
-  (name edit)
-  (public_name edit)
+  (name flora)
+  (public_name flora)
   (libraries ppx_deriving containers containers.data lambda-term teash lens)
   (preprocess (pps ppx_deriving.show ppx_deriving.eq lens.ppx_deriving)))
