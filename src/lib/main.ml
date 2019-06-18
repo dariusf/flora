@@ -119,7 +119,7 @@ let update_debug state =
   let d2 = d ^ "; next = " ^ d1 in
   (state_debug ^= d2) state
 
-let get_field_text f = Zed_edit.text f.engine |> Zed_rope.to_string
+let get_field_text f = Zed_edit.text f.engine |> Zed_rope.to_string |> Zed_string.to_utf8
 
 let clear_field f =
   Zed_edit.(get_action Delete_prev_line f.ctx); f
@@ -240,7 +240,7 @@ let update state = function
           | `Enter, _mods -> state, Cmd.msg CommitCompletion
           | _ ->
             let act = match key with
-              | `ASCII c, _mods -> Some (Zed_edit.Insert (CamomileLibrary.UChar.of_char c))
+              | `ASCII c, _mods -> Some (Zed_edit.Insert (Zed_char.unsafe_of_char c))
               | `Backspace, _mods -> Some (Zed_edit.Delete_prev_char)
               | `Arrow `Left, _mods -> Some (Zed_edit.Prev_char)
               | `Arrow `Right, _mods -> Some (Zed_edit.Next_char)

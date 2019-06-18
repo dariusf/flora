@@ -12,9 +12,9 @@
  (name flora)
  (depends
   (ocaml (< 4.08))
-   ppx_deriving
-   containers
-   lambda-term
-   teash
-   lens)
+   (ppx_deriving (= 4.3))
+   (containers (= 2.5))
+   (lambda-term (= 2.0.1))
+   (teash (= 0.1.0))
+   (lens (= 1.2.2)))
  (synopsis "A practical structural editor"))
